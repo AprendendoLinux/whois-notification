@@ -123,7 +123,7 @@ version: '3.8'
 
 services:
   whois_notification:
-    image: aprendendolinux/whois-notification:latest
+    image: ghcr.io/aprendendolinux/whois-notification:latest
     container_name: whois_notification
     # Mapeamento do diretório completo para flexibilidade de arquivos (JSON e Imagens)
     volumes:
