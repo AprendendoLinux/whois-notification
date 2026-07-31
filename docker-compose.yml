@@ -1,0 +1,30 @@
+services:
+  whois_notification:
+    image: aprendendolinux/whois-notification:latest
+    container_name: whois_notification
+    # Mapeamento do diretório completo para flexibilidade de arquivos (JSON e Imagens)
+    volumes:
+      - /srv/whois-notification:/app/data
+    environment:
+      # Configurações do Telegram
+      # Obtenha o token conversando com o @BotFather no Telegram
+      - TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789
+      
+      # Configurações de E-mail (Servidor SMTP)
+      - SMTP_SERVER=smtp.exemplo.com.br
+      - SMTP_PORT=587
+      - SMTP_USER=alertas@exemplo.com.br
+      - SMTP_PASSWORD=sua_senha_super_secreta
+      
+      # Metadados de Envio
+      - SMTP_FROM=alertas@exemplo.com.br
+      - SMTP_FROM_NAME=Whois Notification System
+      
+      # Definir timezone adequado para o agendamento correto (ex: 09:00 AM local)
+      - TZ=America/Sao_Paulo
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

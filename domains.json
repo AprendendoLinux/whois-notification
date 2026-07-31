@@ -1,0 +1,20 @@
+[
+  {
+    "domain": "suaempresa.com.br",
+    "emails": [
+        "infra@suaempresa.com.br", 
+        "diretoria@suaempresa.com.br"
+    ],
+    "telegrams": [
+        "111111111", 
+        "-10022222222"
+    ],
+    "days_threshold": 45
+  },
+  {
+    "domain": "projeto-secundario.dev",
+    "emails": ["devops@suaempresa.com.br"],
+    "telegrams": [],
+    "days_threshold": 15
+  }
+]
