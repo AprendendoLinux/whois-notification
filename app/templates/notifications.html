@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Eventos{% endblock %}
+{% block crumb %}// REGISTRO DE EVENTOS{% endblock %}
+{% block heading %}Alertas e mudanças{% endblock %}
+
+{% block content %}
+<section class="grid grid-3">
+  <div class="panel span-2">
+    <div class="panel-head"><h2>Alertas enviados</h2><span class="hint">últimos {{ items|length }}</span></div>
+    {% if items %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Quando</th><th>Domínio</th><th>Tipo</th><th>Canal / destino</th><th>Resultado</th></tr></thead>
+        <tbody>
+        {% for n in items %}
+        <tr>
+          <td class="mono">{{ n.created_at|datetime }}</td>
+          <td>{% if n.domain %}<a href="/domains/{{ n.domain_id }}">{{ n.domain.name }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>{{ {"domain_expiry":"Expiração","ssl_expiry":"SSL","change":"Mudança","test":"Teste"}.get(n.kind, n.kind) }}{% if n.days_left is not none %} <span class="muted">({{ n.days_left }}d)</span>{% endif %}</td>
+          <td><span class="badge {{ 'magenta' if n.channel == 'telegram' else '' }}">{{ "E-mail" if n.channel == "email" else "Telegram" }}</span> <span class="mono">{{ n.target }}</span></td>
+          <td>{% if n.success %}<span class="badge ok">Enviado</span>{% else %}<span class="badge crit">Falhou</span><div class="muted mono" style="font-size:11px;margin-top:4px;max-width:340px">{{ n.error }}</div>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="muted">Nenhum alerta enviado ainda.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>Mudanças detectadas</h2></div>
+    {% if changes %}
+    <ul class="timeline">
+      {% for c in changes %}
+      <li class="{{ c.severity }}">
+        <div class="when">{{ c.created_at|datetime }} · <a href="/domains/{{ c.domain_id }}">{{ c.domain.name }}</a></div>
+        <div class="what">{{ c.field }}</div>
+        <div class="diff"><span class="old">{{ c.old_value }}</span> → <span class="new">{{ c.new_value }}</span></div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Nada por aqui ainda.</p>{% endif %}
+  </div>
+</section>
+{% endblock %}

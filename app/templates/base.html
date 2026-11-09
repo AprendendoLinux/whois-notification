@@ -1,0 +1,58 @@
+{% from "macros.html" import logo_mark, icon, flashes %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#04060c">
+  <title>{% block title %}{{ APP_NAME }}{% endblock %} · Whois Notification</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M24 2 43 13v22L24 46 5 35V13z' fill='%2304060c' stroke='%2300e5ff' stroke-width='3'/%3E%3Cpath d='M24 24 33 15' stroke='%2300e5ff' stroke-width='3'/%3E%3Ccircle cx='33' cy='15' r='3' fill='%23ff2bd6'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}?v={{ APP_VERSION }}">
+  <script src="{{ url_for('static', path='vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', path='vendor/alpine.min.js') }}" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}' x-data="{ menu: false }">
+<div class="shell">
+  <aside class="sidebar" :class="menu && 'open'" @click.outside="menu = false">
+    <a class="brand" href="/">{{ logo_mark() }}<span class="brand-name">WHOIS<br>NOTIFICATION<small>DOMAIN CONTROL</small></span></a>
+    <nav class="nav" aria-label="Principal">
+      <a href="/" class="{{ 'active' if nav == 'dashboard' }}">{{ icon("grid") }} Painel</a>
+      <a href="/domains/new" class="{{ 'active' if nav == 'domains' }}">{{ icon("plus") }} Novo domínio</a>
+      <a href="/contacts" class="{{ 'active' if nav == 'contacts' }}">{{ icon("users") }} Contatos</a>
+      <a href="/notifications" class="{{ 'active' if nav == 'notifications' }}">{{ icon("bell") }} Eventos</a>
+      <a href="/settings" class="{{ 'active' if nav == 'settings' }}">{{ icon("cog") }} Configurações</a>
+    </nav>
+    <div class="sidebar-foot">
+      <span>Operador: <b class="dim">{{ user.username }}</b></span>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+        <button class="btn ghost sm" type="submit">Sair</button>
+      </form>
+      <span class="mono">v{{ APP_VERSION }}</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="btn ghost sm menu-btn" type="button" @click.stop="menu = !menu" aria-label="Abrir menu">{{ icon("menu") }}</button>
+      <div class="title">
+        <span class="crumb">{% block crumb %}// SISTEMA{% endblock %}</span>
+        <h1>{% block heading %}{% endblock %}</h1>
+      </div>
+      <div class="spacer"></div>
+      <div class="actions">{% block top_actions %}{% endblock %}</div>
+      <div class="clock" x-data="clock()" x-init="tick()">
+        <b x-text="time">--:--:--</b><br><span class="full" x-text="date"></span>
+      </div>
+    </header>
+    <main class="content">
+      {{ flashes(request) }}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<script src="{{ url_for('static', path='js/app.js') }}?v={{ APP_VERSION }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

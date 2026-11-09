@@ -1,0 +1,10 @@
+{% from "macros.html" import icon %}
+{% if checking %}
+<span id="check-btn" hx-get="/domains/{{ d.id }}/status?was=1" hx-trigger="every 2s" hx-swap="outerHTML">
+  <button class="btn" type="button" disabled><span class="spin" style="display:inline-flex">{{ icon("refresh") }}</span><span>Varrendo…</span></button>
+</span>
+{% else %}
+<span id="check-btn">
+  <button class="btn" type="button" hx-post="/domains/{{ d.id }}/check" hx-target="#check-btn" hx-swap="outerHTML">{{ icon("refresh") }}<span>Verificar agora</span></button>
+</span>
+{% endif %}

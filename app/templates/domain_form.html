@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% set editing = domain is not none %}
+{% block title %}{{ "Editar " ~ domain.name if editing else "Novo domínio" }}{% endblock %}
+{% block crumb %}// {{ "EDITAR ALVO" if editing else "NOVO ALVO" }}{% endblock %}
+{% block heading %}{{ domain.name if editing else "Cadastrar domínio" }}{% endblock %}
+{% block top_actions %}<a class="btn ghost sm" href="{{ '/domains/%d' % domain.id if editing else '/' }}">{{ icon("back") }}<span>Voltar</span></a>{% endblock %}
+
+{% macro val(field, default="") -%}
+{%- if form is defined and form -%}{{ form.get(field, "") }}{%- elif editing -%}{{ domain[field] }}{%- else -%}{{ default }}{%- endif -%}
+{%- endmacro %}
+{% macro checked(field, default=true) -%}
+{%- if form is defined and form -%}{{ "checked" if form.get(field) == "on" }}{%- elif editing -%}{{ "checked" if domain[field] }}{%- else -%}{{ "checked" if default }}{%- endif -%}
+{%- endmacro %}
+{% set selected_ids = (form.getlist("contact_ids")|map("int")|list) if (form is defined and form) else ((domain.contacts|map(attribute="id")|list) if editing else []) %}
+
+{% block content %}
+{% if errors %}<div class="flash">{% for e in errors %}<div class="err" role="alert">{{ e }}</div>{% endfor %}</div>{% endif %}
+<form class="form" method="post" action="{{ '/domains/%d/edit' % domain.id if editing else '/domains/new' }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+  <section class="panel corners">
+    <div class="panel-head"><h2>Alvo</h2></div>
+    <div class="form">
+      <div class="field">
+        <label for="name">Domínio</label>
+        <input id="name" class="mono" type="text" name="name" value="{{ val('name') }}" placeholder="suaempresa.com.br" required autofocus autocapitalize="off" spellcheck="false">
+        <span class="help">Sem http://, https:// ou www. Se você colar uma URL, ela é limpa automaticamente.</span>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="dt">Alerta de expiração (dias)</label>
+          <input id="dt" type="number" name="days_threshold" min="1" max="3650" value="{{ val('days_threshold', 30) }}" required>
+          <span class="help">Começa a alertar quando faltar este número de dias.</span>
+        </div>
+        <div class="field">
+          <label for="st">Alerta de SSL (dias)</label>
+          <input id="st" type="number" name="ssl_threshold" min="1" max="365" value="{{ val('ssl_threshold', 14) }}" required>
+          <span class="help">Certificados Let's Encrypt renovam com 30 dias de antecedência.</span>
+        </div>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" name="enabled" {{ checked('enabled') }}> Monitoramento ativo</label>
+        <label class="check"><input type="checkbox" name="monitor_ssl" {{ checked('monitor_ssl') }}> Monitorar certificado SSL</label>
+      </div>
+      <div class="field">
+        <label for="notes">Anotações</label>
+        <textarea id="notes" name="notes" placeholder="Ex.: renovar pela conta do financeiro; registrado no Registro.br">{{ val('notes') }}</textarea>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Destinatários dos alertas</h2><a class="hint" href="/contacts">gerenciar contatos →</a></div>
+    <div class="form">
+      {% if contacts %}
+      <div class="checklist">
+        {% for c in contacts %}
+        <label><input type="checkbox" name="contact_ids" value="{{ c.id }}" {{ "checked" if c.id in selected_ids }}> <span>{{ "✉" if c.kind == "email" else "✈" }}</span> <span style="min-width:0;overflow:hidden;text-overflow:ellipsis">{{ c.label }}</span></label>
+        {% endfor %}
+      </div>
+      {% else %}<p class="muted" style="margin:0">Nenhum contato cadastrado ainda. Adicione abaixo.</p>{% endif %}
+      <div class="row">
+        <div class="field">
+          <label for="ne">Novos e-mails</label>
+          <textarea id="ne" name="new_emails" placeholder="infra@empresa.com.br, diretoria@empresa.com.br">{{ form.get('new_emails', '') if form is defined and form else '' }}</textarea>
+          <span class="help">Separe por vírgula ou quebra de linha.</span>
+        </div>
+        <div class="field">
+          <label for="nt">Novos chats do Telegram</label>
+          <textarea id="nt" name="new_telegrams" placeholder="111111111, -10022222222">{{ form.get('new_telegrams', '') if form is defined and form else '' }}</textarea>
+          <span class="help">ID do usuário ou do grupo (grupos começam com -100). O bot precisa receber um /start antes.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn primary" type="submit">{{ "Salvar alterações" if editing else "Cadastrar e verificar" }}</button>
+    <a class="btn ghost" href="{{ '/domains/%d' % domain.id if editing else '/' }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

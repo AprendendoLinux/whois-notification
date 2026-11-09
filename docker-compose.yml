@@ -1,27 +1,34 @@
 services:
   whois_notification:
-    image: aprendendolinux/whois-notification:latest
+    image: ghcr.io/aprendendolinux/whois-notification:latest
     container_name: whois_notification
-    # Mapeamento do diretório completo para flexibilidade de arquivos (JSON e Imagens)
+    ports:
+      - "8000:8000"
+    # Banco SQLite (whois.db), logo.* e, se existir, o antigo domains.json para migração
     volumes:
       - /srv/whois-notification:/app/data
     environment:
-      # Configurações do Telegram
-      # Obtenha o token conversando com o @BotFather no Telegram
-      - TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789
-      
-      # Configurações de E-mail (Servidor SMTP)
-      - SMTP_SERVER=smtp.exemplo.com.br
-      - SMTP_PORT=587
-      - SMTP_USER=alertas@exemplo.com.br
-      - SMTP_PASSWORD=sua_senha_super_secreta
-      
-      # Metadados de Envio
-      - SMTP_FROM=alertas@exemplo.com.br
-      - SMTP_FROM_NAME=Whois Notification System
-      
-      # Definir timezone adequado para o agendamento correto (ex: 09:00 AM local)
+      # Fuso horário do agendamento e da interface
       - TZ=America/Sao_Paulo
+
+      # Administrador criado na primeira execução (opcional; sem isso, a tela /setup cria o usuário)
+      # - ADMIN_USER=admin
+      # - ADMIN_PASSWORD=troque_esta_senha
+
+      # Use 1 quando a interface estiver atrás de HTTPS (proxy reverso)
+      # - COOKIE_SECURE=1
+
+      # As configurações abaixo também podem ser feitas pela interface (Configurações).
+      # Quando definidas aqui, têm prioridade e ficam bloqueadas na interface.
+      # - TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789
+      # - SMTP_SERVER=smtp.exemplo.com.br
+      # - SMTP_PORT=587
+      # - SMTP_SECURITY=starttls        # starttls | ssl | none
+      # - SMTP_USER=alertas@exemplo.com.br
+      # - SMTP_PASSWORD=sua_senha_super_secreta
+      # - SMTP_FROM=alertas@exemplo.com.br
+      # - SMTP_FROM_NAME=Whois Notification System
+      # - CHECK_TIME=09:00
     restart: unless-stopped
     logging:
       driver: "json-file"

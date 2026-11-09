@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Configurações{% endblock %}
+{% block crumb %}// PARÂMETROS DO SISTEMA{% endblock %}
+{% block heading %}Configurações{% endblock %}
+
+{% macro input(key, type="text", placeholder="") -%}
+{% set it = s[key] %}
+<div class="field">
+  <label for="f-{{ key }}">{{ it.def.label }}</label>
+  {% if it.def.secret %}
+    <input id="f-{{ key }}" type="password" name="{{ key }}" autocomplete="new-password"
+           placeholder="{{ '•••••••• (definido — deixe em branco para manter)' if it.is_set else placeholder }}" {{ "disabled" if it.locked }}>
+    {% if it.is_set and not it.locked %}<label class="check" style="font-size:12px;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" name="{{ key }}__clear"> apagar valor salvo</label>{% endif %}
+  {% else %}
+    <input id="f-{{ key }}" type="{{ type }}" name="{{ key }}" value="{{ it.value }}" placeholder="{{ placeholder }}" {{ "disabled" if it.locked }}>
+  {% endif %}
+  {% if it.locked %}<span class="lock">🔒 definido pela variável de ambiente {{ it.def.env }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{% block content %}
+<section class="grid grid-2">
+  <form class="panel corners form" method="post" action="/settings">
+    <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+    <input type="hidden" name="_group" value="smtp">
+    <div class="panel-head" style="margin:0"><h2>E-mail (SMTP)</h2></div>
+    <div class="row">
+      {{ input("smtp_server", placeholder="smtp.exemplo.com.br") }}
+      {{ input("smtp_port", "number") }}
+    </div>
+    <div class="field">
+      <label for="f-sec">Segurança</label>
+      <select id="f-sec" name="smtp_security" {{ "disabled" if s.smtp_security.locked }}>
+        {% for v, l in [("starttls","STARTTLS (porta 587)"),("ssl","SSL/TLS direto (porta 465)"),("none","Sem criptografia (porta 25)")] %}
+        <option value="{{ v }}" {{ "selected" if s.smtp_security.value == v }}>{{ l }}</option>
+        {% endfor %}
+      </select>
+      {% if s.smtp_security.locked %}<span class="lock">🔒 definido pela variável de ambiente SMTP_SECURITY</span>{% endif %}
+    </div>
+    <div class="row">
+      {{ input("smtp_user") }}
+      {{ input("smtp_password") }}
+    </div>
+    <div class="row">
+      {{ input("smtp_from", placeholder="alertas@exemplo.com.br") }}
+      {{ input("smtp_from_name") }}
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Salvar SMTP</button></div>
+  </form>
+
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <form class="panel form" method="post" action="/settings">
+      <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+      <input type="hidden" name="_group" value="telegram">
+      <div class="panel-head" style="margin:0"><h2>Telegram</h2></div>
+      {{ input("telegram_token", placeholder="123456789:ABCDEF…") }}
+      <p class="muted" style="margin:0;font-size:12px">Crie o bot com o @BotFather. Cada destinatário precisa enviar <code>/start</code> ao bot (ou adicioná-lo ao grupo) antes de receber mensagens.</p>
+      <div class="actions"><button class="btn primary" type="submit">Salvar Telegram</button></div>
+    </form>
+
+    <form class="panel form" method="post" action="/settings/test">
+      <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+      <div class="panel-head" style="margin:0"><h2>Enviar teste</h2></div>
+      <div class="row" style="align-items:end">
+        <div class="field"><label for="tc">Canal</label><select id="tc" name="channel"><option value="email">E-mail</option><option value="telegram">Telegram</option></select></div>
+        <div class="field"><label for="tt">Destino</label><input id="tt" class="mono" type="text" name="target" placeholder="e-mail ou chat ID" required></div>
+      </div>
+      <div class="actions"><button class="btn" type="submit">{{ icon("send") }} Enviar mensagem de teste</button></div>
+    </form>
+  </div>
+</section>
+
+<section class="grid grid-2">
+  <form class="panel form" method="post" action="/settings">
+    <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+    <input type="hidden" name="_group" value="schedule">
+    <div class="panel-head" style="margin:0"><h2>Agendamento e política de alertas</h2><span class="hint">próxima: {{ next_run|datetime if next_run else "—" }}</span></div>
+    <div class="row">
+      {{ input("check_time", placeholder="09:00") }}
+      {{ input("history_days", "number") }}
+    </div>
+    <div class="row">
+      <div class="field">
+        {{ input("milestones", placeholder="60,45,30,15,7") }}
+      </div>
+      {{ input("daily_below", "number") }}
+    </div>
+    <p class="muted" style="margin:0;font-size:12px;line-height:1.6">
+      Como funciona: o primeiro alerta sai assim que o domínio entra na janela definida nele. Depois disso, sai um novo alerta a cada <b>marco</b> cruzado
+      (ex.: 30, 15 e 7 dias) e, abaixo do limite de <b>aviso diário</b>, um alerta por dia, inclusive depois de expirado. Assim você não recebe a mesma mensagem 45 dias seguidos.
+    </p>
+    <label class="check"><input type="checkbox" name="alert_on_changes" {{ "checked" if s.alert_on_changes.value == "1" }}> Alertar quando nameservers, registrador, status, MX ou DNSSEC mudarem</label>
+    <div class="actions"><button class="btn primary" type="submit">Salvar política</button></div>
+  </form>
+
+  <form class="panel form" method="post" action="/settings/password">
+    <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+    <div class="panel-head" style="margin:0"><h2>Conta</h2><span class="hint">{{ user.username }}</span></div>
+    <div class="field"><label for="pc">Senha atual</label><input id="pc" type="password" name="current" autocomplete="current-password" required></div>
+    <div class="row">
+      <div class="field"><label for="pn">Nova senha</label><input id="pn" type="password" name="new" minlength="8" autocomplete="new-password" required></div>
+      <div class="field"><label for="pn2">Confirme</label><input id="pn2" type="password" name="new2" minlength="8" autocomplete="new-password" required></div>
+    </div>
+    <div class="actions"><button class="btn" type="submit">Alterar senha</button></div>
+  </form>
+</section>
+{% endblock %}

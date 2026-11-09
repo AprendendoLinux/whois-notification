@@ -4,8 +4,8 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/aprendendolinux/whois-notification)](https://hub.docker.com/r/aprendendolinux/whois-notification)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Bem-vindo ao repositório oficial do **Whois Notification**! 
-Um sistema robusto, conteinerizado e totalmente automatizado para monitoramento pró-ativo de datas de expiração de domínios. 
+Bem-vindo ao repositório oficial do **Whois Notification**!
+Um sistema conteinerizado para monitoramento pró-ativo de domínios, com **painel web**, **panorama completo de cada domínio** (WHOIS, DNS, e-mail, SSL e HTTP), **detecção de mudanças suspeitas** e alertas por **Telegram** e **e-mail**.
 
 Repositório Oficial: [https://github.com/AprendendoLinux/whois-notification](https://github.com/AprendendoLinux/whois-notification)
 
@@ -14,17 +14,20 @@ Repositório Oficial: [https://github.com/AprendendoLinux/whois-notification](ht
 ## 📖 Índice
 
 1. [Introdução e Motivação](#-introdução-e-motivação)
-2. [Arquitetura do Sistema](#-arquitetura-do-sistema)
-3. [Funcionalidades Principais (Features)](#-funcionalidades-principais-features)
-4. [Pré-requisitos de Instalação](#-pré-requisitos-de-instalação)
-5. [Guia de Implantação (Quick Start)](#-guia-de-implantação-quick-start)
-6. [Referência do docker-compose.yml](#-referência-do-docker-composeyml)
-7. [Mapeamento de Volumes e Arquivos Base](#-mapeamento-de-volumes-e-arquivos-base)
-8. [Configuração Avançada: domains.json](#-configuração-avançada-domainsjson)
-9. [Comportamento do Agendador (Scheduler)](#-comportamento-do-agendador-scheduler)
-10. [Notificações e Estados de Alerta](#-notificações-e-estados-de-alerta)
-11. [Troubleshooting e Resolução de Problemas](#-troubleshooting-e-resolução-de-problemas)
-12. [Contribuição](#-contribuição)
+2. [Novidades da versão 2](#-novidades-da-versão-2)
+3. [Arquitetura do Sistema](#-arquitetura-do-sistema)
+4. [Funcionalidades](#-funcionalidades)
+5. [Pré-requisitos](#-pré-requisitos)
+6. [Guia de Implantação (Quick Start)](#-guia-de-implantação-quick-start)
+7. [Atualizando da versão 1 (domains.json)](#-atualizando-da-versão-1-domainsjson)
+8. [Referência do docker-compose.yml](#-referência-do-docker-composeyml)
+9. [Variáveis de Ambiente](#-variáveis-de-ambiente)
+10. [Política de Alertas](#-política-de-alertas)
+11. [Detecção de Mudanças](#-detecção-de-mudanças)
+12. [Segurança](#-segurança)
+13. [Desenvolvimento Local](#-desenvolvimento-local)
+14. [Troubleshooting](#-troubleshooting)
+15. [Contribuição](#-contribuição)
 
 ---
 
@@ -32,119 +35,150 @@ Repositório Oficial: [https://github.com/AprendendoLinux/whois-notification](ht
 
 Perder a data de renovação de um domínio estratégico é um dos incidentes mais críticos para qualquer infraestrutura de TI, podendo resultar em indisponibilidade imediata de sites corporativos, falhas na entrega de e-mails, perda de confiança de clientes e, em casos extremos, o sequestro do domínio por terceiros.
 
-O **Whois Notification** foi projetado para mitigar esse risco de forma definitiva. Operando 100% em background via Docker, ele realiza consultas diárias aos servidores de registro global (WHOIS) e orquestra o envio de alertas multicanal (Telegram e E-mail HTML customizado) garantindo que a equipe de infraestrutura ou a diretoria sejam avisadas com antecedência parametrizável.
+O **Whois Notification** foi projetado para mitigar esse risco de forma definitiva. Ele consulta diariamente os servidores de registro (WHOIS), o DNS, o certificado TLS e o site de cada domínio, e orquestra o envio de alertas multicanal (Telegram e e-mail HTML) com antecedência parametrizável.
+
+---
+
+## 🆕 Novidades da versão 2
+
+* **Interface web** com painel visual: indicadores, radar de expirações para os próximos 12 meses e cartões por domínio.
+* **Panorama completo do domínio**: WHOIS, registros DNS, segurança de e-mail (SPF, DMARC, DKIM), certificado SSL/TLS, disponibilidade HTTP, histórico e resposta WHOIS bruta.
+* **Banco SQLite** no lugar do `domains.json`, com **migração automática** na primeira execução.
+* **Alertas de certificado SSL** vencendo ou expirado.
+* **Detecção de mudanças** em nameservers, registrador, status, MX e DNSSEC, com alerta de possível sequestro de domínio.
+* **Política de alertas inteligente**: avisos em marcos (60, 45, 30, 15 e 7 dias) e diários na reta final, em vez de repetir a mesma mensagem todos os dias.
+* **Configuração pela interface**: SMTP, Telegram, horário e política. As variáveis de ambiente continuam funcionando e têm prioridade.
+* **Correções**: datas com fuso horário que impediam a verificação, suporte real à porta 465 (SSL), timeouts e registro de erros no Telegram.
 
 ---
 
 ## 🏗 Arquitetura do Sistema
 
-O sistema é construído utilizando uma abordagem *cloud-native* baseada em contêineres:
-
 ```text
-+-------------------+       +-----------------------+       +-------------------+
-|                   |       |                       | ----> | Servidor WHOIS    |
-|   domains.json    | ----> |  Container Docker     |       | (Registro.br, etc)|
-|   (Regras)        |       |  (Python 3.11 Slim)   | <---- | Datas / Status    |
-|                   |       |                       |       +-------------------+
-+-------------------+       |  [ Scheduler 24/7 ]   |
-                            |  [ Lógica de Alertas] | ----> +-------------------+
-+-------------------+       |  [ Parser de WHOIS  ] |       | API do Telegram   |
-|                   | ----> |                       |       | (Mensagem Push)   |
-|   logo.* (Imagem) |       +-----------------------+       +-------------------+
-+-------------------+                   |
-                                        |                   +-------------------+
-                                        +-----------------> | Servidor SMTP     |
-                                                            | (E-mail HTML)     |
-                                                            +-------------------+
+                         +--------------------------------------+
+  Navegador  <---------> |  Container Docker (Python 3.12)      |
+  (painel web)           |                                      |
+                         |  FastAPI ── interface + API JSON     | ----> WHOIS (Registro.br, Verisign, ...)
+                         |  APScheduler ── varredura diária     | ----> DNS (A, AAAA, NS, MX, TXT, CAA, DS)
+                         |  Coletores ── WHOIS/DNS/SSL/HTTP     | ----> Porta 443 (certificado TLS)
+                         |  Notificador ── e-mail / Telegram    | ----> HTTP(S) do site
+                         +------------------+-------------------+
+                                            |                    ----> API do Telegram / Servidor SMTP
+                                 /app/data (volume)
+                                 ├── whois.db  (SQLite)
+                                 ├── logo.*    (logotipo dos e-mails)
+                                 └── .secret_key
 ```
 
----
-
-## ✨ Funcionalidades Principais (Features)
-
-*   **Monitoramento Universal:** Suporte a virtualmente qualquer TLD (Terminação de domínio), incluindo `.com`, `.com.br`, `.net`, `.dev`, `.online`, etc. Graças à integração nativa com o binário `whois` do Linux em conjunto com a biblioteca `python-whois`.
-*   **Granularidade de Alertas:** Cada domínio possui sua própria régua de corte (`days_threshold`). O domínio da empresa pode alertar com 45 dias de antecedência, enquanto um domínio secundário alerta com apenas 15.
-*   **Alertas Multicanal por Domínio:** Direcione alertas de domínios específicos para equipes específicas. O domínio de TI vai para o grupo do Telegram de Infra; o domínio do RH vai para o e-mail da diretoria.
-*   **Auto-provisionamento Segregado:** Se o sistema inicializar sem um arquivo de configuração, ele constrói automaticamente um modelo instrutivo (boilerplate) na máquina host para evitar crash-loops.
-*   **Identificação Dinâmica de Assets (Logo):** Mapeie a pasta inteira de dados. O sistema localizará automaticamente a sua imagem de marca (PNG, JPG, SVG, JPEG, etc.) via varredura MIME para anexar inline nos relatórios via e-mail.
-*   **Escalonamento de Severidade:** Se o domínio efetivamente expirar, as notificações mudam drasticamente o tom, layout (coletor vermelho escuro) e assunto, alertando para um *status de expiração*.
-*   **Agendamento Resiliente:** Processo diário fixo sem vazamento de memória (memory leaks), executado por um agendador Python (`schedule`) validado em aplicações corporativas.
+| Componente | Tecnologia |
+|---|---|
+| Backend e API | FastAPI + Uvicorn |
+| Banco de dados | SQLite (SQLAlchemy 2 + migrações Alembic automáticas) |
+| Agendador | APScheduler (no mesmo processo) |
+| Interface | Jinja2, HTMX, Alpine.js e ECharts, servidos localmente (funciona sem internet) |
 
 ---
 
-## 🛠 Pré-requisitos de Instalação
+## ✨ Funcionalidades
 
-*   Servidor rodando **Linux** (Debian, Ubuntu, CentOS, etc).
-*   **Docker Engine** instalado (versão 20.10+ recomendada).
-*   **Docker Compose** (versão V2 / plugin).
-*   Acesso a um servidor **SMTP** autêntico (ex: Mailcow, Postfix, Gmail App Passwords, Sendgrid).
-*   Um **Bot do Telegram** configurado através do @BotFather.
+* **Monitoramento Universal:** suporte a praticamente qualquer TLD (`.com`, `.com.br`, `.net`, `.dev`, `.online`, etc.).
+* **Panorama por domínio:**
+  * **WHOIS:** registrador, titular, datas, status EPP, nameservers e DNSSEC.
+  * **DNS:** registros A, AAAA, NS, MX, TXT, CAA e SOA.
+  * **E-mail:** análise de SPF, DMARC e DKIM, com nota de 0 a 100.
+  * **SSL/TLS:** emissor, validade, cadeia confiável, nomes cobertos, protocolo e chave.
+  * **HTTP:** status, tempo de resposta, redirecionamentos e cabeçalhos de segurança.
+  * **Histórico:** gráfico de tempo de resposta, linha do tempo de mudanças e lista de varreduras.
+* **Granularidade de Alertas:** cada domínio tem sua janela de alerta de expiração e de SSL.
+* **Contatos reutilizáveis:** um e-mail ou chat do Telegram pode receber alertas de vários domínios. Cada contato tem um botão "Testar".
+* **Escalonamento de Severidade:** os alertas mudam de tom e de cor quando o domínio está perto de expirar ou já expirou.
+* **Logotipo nos e-mails:** coloque um arquivo `logo.*` (PNG, JPG, SVG...) no volume e ele aparece no cabeçalho dos e-mails.
+* **Registro de eventos:** todos os envios, com sucesso ou falha, ficam registrados e aparecem na interface.
+
+---
+
+## 🛠 Pré-requisitos
+
+* Servidor **Linux** com **Docker Engine** (20.10+) e **Docker Compose** V2.
+* Opcional: acesso a um servidor **SMTP** (Mailcow, Postfix, Gmail com senha de app, SendGrid...).
+* Opcional: um **bot do Telegram** criado pelo @BotFather.
 
 ---
 
 ## 🚀 Guia de Implantação (Quick Start)
 
-### Passo 1: Preparando a estrutura de diretórios do Host
-O container precisa de um volume no host para ler as configurações e a imagem de logo de forma persistente.
+### Passo 1: Preparar o diretório de dados
 
 ```bash
 sudo mkdir -p /srv/whois-notification
 cd /srv/whois-notification
 ```
 
-Coloque dentro dessa pasta o seu arquivo de logotipo (ex: `logo.png`, `logo.jpg`).
+Coloque nessa pasta o seu logotipo (ex.: `logo.png`), se quiser usá-lo nos e-mails.
 
-### Passo 2: Criar o arquivo de orquestração
-Crie o arquivo `docker-compose.yml` (veja a seção seguinte para os parâmetros).
+### Passo 2: Criar o `docker-compose.yml`
 
-### Passo 3: Inicialização
-Suba a stack em *detached mode*:
+Veja a [referência abaixo](#-referência-do-docker-composeyml).
+
+### Passo 3: Subir o serviço
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-Neste exato momento, se não houver um `domains.json`, o container criará um modelo padrão automaticamente na sua pasta `/srv/whois-notification`.
+### Passo 4: Acessar o painel
 
-### Passo 4: Verifique os logs
-Acompanhe o que o sistema está fazendo:
+Abra `http://SEU_SERVIDOR:8000`. Na primeira vez, o sistema pede para criar a conta de administrador. Se você definir `ADMIN_USER` e `ADMIN_PASSWORD`, ela é criada automaticamente.
+
+Depois disso:
+1. Em **Configurações**, preencha o SMTP e/ou o token do Telegram e use **Enviar teste**.
+2. Em **Novo domínio**, cadastre seus domínios e os destinatários dos alertas.
+
+### Passo 5: Acompanhar os logs
+
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
+
+---
+
+## 🔄 Atualizando da versão 1 (domains.json)
+
+Não é preciso fazer nada manualmente. Ao iniciar a versão 2 com o mesmo volume:
+
+1. Se existir `/app/data/domains.json` e o banco estiver vazio, todos os domínios, e-mails, chats e limites são importados para o SQLite.
+2. O arquivo é renomeado para `domains.json.migrated`, como backup. Ele não é apagado.
+3. Os domínios de exemplo (`exemplo.com.br`, `outroexemplo.net`) e entradas inválidas são ignorados.
+4. Uma varredura começa logo em seguida.
+
+As variáveis de SMTP e Telegram da versão 1 continuam valendo. Só é preciso **publicar a porta 8000** no compose para acessar a interface.
 
 ---
 
 ## ⚙️ Referência do docker-compose.yml
 
-Utilizamos a imagem oficial armazenada no DockerHub `aprendendolinux/whois-notification:latest`. Abaixo, um manifesto completo com **dados genéricos** de exemplo. Preencha com as variáveis do seu ambiente de produção.
-
 ```yaml
-version: '3.8'
-
 services:
   whois_notification:
     image: ghcr.io/aprendendolinux/whois-notification:latest
     container_name: whois_notification
-    # Mapeamento do diretório completo para flexibilidade de arquivos (JSON e Imagens)
+    ports:
+      - "8000:8000"
     volumes:
       - /srv/whois-notification:/app/data
     environment:
-      # Configurações do Telegram
-      # Obtenha o token conversando com o @BotFather no Telegram
-      - TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789
-      
-      # Configurações de E-mail (Servidor SMTP)
-      - SMTP_SERVER=smtp.exemplo.com.br
-      - SMTP_PORT=587
-      - SMTP_USER=alertas@exemplo.com.br
-      - SMTP_PASSWORD=sua_senha_super_secreta
-      
-      # Metadados de Envio
-      - SMTP_FROM=alertas@exemplo.com.br
-      - SMTP_FROM_NAME=Whois Notification System
-      
-      # Definir timezone adequado para o agendamento correto (ex: 09:00 AM local)
       - TZ=America/Sao_Paulo
+      # - ADMIN_USER=admin
+      # - ADMIN_PASSWORD=troque_esta_senha
+      # - COOKIE_SECURE=1
+      # - TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789
+      # - SMTP_SERVER=smtp.exemplo.com.br
+      # - SMTP_PORT=587
+      # - SMTP_SECURITY=starttls
+      # - SMTP_USER=alertas@exemplo.com.br
+      # - SMTP_PASSWORD=sua_senha_super_secreta
+      # - SMTP_FROM=alertas@exemplo.com.br
+      # - SMTP_FROM_NAME=Whois Notification System
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -153,101 +187,130 @@ services:
         max-file: "3"
 ```
 
----
-
-## 📂 Mapeamento de Volumes e Arquivos Base
-
-A diretiva `- /srv/whois-notification:/app/data` diz ao Docker que tudo dentro dessa pasta física no seu servidor espelhará dentro do container.
-
-O sistema espera encontrar (ou criará) dois tipos de arquivos ali:
-1. `domains.json` - O motor de regras.
-2. `logo.*` - Qualquer arquivo que inicie com o nome "logo", para compor os e-mails HTML.
+> **Importante:** o agendador roda dentro do processo da aplicação. Mantenha **um único container** (e um único worker) por banco de dados.
 
 ---
 
-## 📝 Configuração Avançada: domains.json
+## 🔧 Variáveis de Ambiente
 
-Este é o cérebro das regras de negócios. É um array de objetos JSON, onde cada objeto dita as regras de um domínio distinto.
+Todas são opcionais. As que configuram SMTP, Telegram e horário também podem ser editadas pela interface. Quando definidas no ambiente, **têm prioridade** e aparecem bloqueadas (🔒) na tela de Configurações.
 
-```json
-[
-  {
-    "domain": "suaempresa.com.br",
-    "emails": [
-        "infra@suaempresa.com.br", 
-        "diretoria@suaempresa.com.br"
-    ],
-    "telegrams": [
-        "111111111", 
-        "-10022222222"
-    ],
-    "days_threshold": 45
-  },
-  {
-    "domain": "projeto-secundario.dev",
-    "emails": ["devops@suaempresa.com.br"],
-    "telegrams": [],
-    "days_threshold": 15
-  }
-]
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `TZ` | `America/Sao_Paulo` | Fuso do agendamento e da interface |
+| `PORT` | `8000` | Porta HTTP dentro do container |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | — | Cria o administrador na primeira execução |
+| `SECRET_KEY` | gerada em `/app/data/.secret_key` | Chave de assinatura das sessões |
+| `COOKIE_SECURE` | `0` | Use `1` atrás de HTTPS |
+| `CHECK_TIME` | `09:00` | Horário da varredura diária |
+| `TELEGRAM_BOT_TOKEN` | — | Token do bot do Telegram |
+| `SMTP_SERVER` | — | Servidor SMTP |
+| `SMTP_PORT` | `587` | Porta SMTP |
+| `SMTP_SECURITY` | `starttls` | `starttls`, `ssl` (porta 465) ou `none` |
+| `SMTP_USER` / `SMTP_PASSWORD` | — | Credenciais SMTP |
+| `SMTP_FROM` / `SMTP_FROM_NAME` | — / `Whois Notification` | Remetente |
+
+---
+
+## 🚨 Política de Alertas
+
+A cada varredura, para a expiração do domínio e para a do certificado SSL:
+
+1. **Fora da janela** (dias restantes acima do limite do domínio): nenhum alerta.
+2. **Ao entrar na janela:** o primeiro alerta é enviado imediatamente.
+3. **Marcos** (padrão `60, 45, 30, 15, 7`): um novo alerta a cada marco cruzado. Se a varredura do dia exato falhar, o alerta sai na próxima.
+4. **Reta final** (padrão: 7 dias ou menos) e **depois de expirado:** um alerta por dia, sem parar, para garantir a recuperação durante o *Redemption Grace Period*.
+5. **Nunca** mais de um alerta do mesmo tipo por dia. Quando o domínio é renovado, o ciclo recomeça.
+
+Os marcos e o limite diário são ajustáveis em **Configurações**. Canais sem configuração (por exemplo, SMTP vazio) são ignorados, e o painel mostra um aviso.
+
+### Perfis de alerta
+
+* 🟡 **Preventivo:** o domínio ou certificado expira em X dias.
+* 🔴 **Crítico:** faltam 7 dias ou menos, ou já expirou ("renove IMEDIATAMENTE").
+* 🔁 **Mudança:** alteração de nameserver, registrador, status perigoso (`clientHold`, `serverHold`, `redemptionPeriod`, `pendingDelete`), MX ou DNSSEC desativado.
+
+---
+
+## 🕵️ Detecção de Mudanças
+
+Cada varredura é comparada com a anterior. As mudanças aparecem na linha do tempo do domínio e no painel. As de severidade **crítica** ou **atenção** geram alerta, e isso pode ser desligado em Configurações.
+
+Alguns servidores WHOIS respondem com dados diferentes conforme o servidor consultado (registro x registrador). Para evitar **falsos alertas de sequestro**, toda mudança de nameserver ou registrador é **confirmada com uma segunda consulta** antes de ser aceita.
+
+---
+
+## 🔒 Segurança
+
+* A interface exige login. As senhas são armazenadas com hash **scrypt**.
+* Todos os formulários têm proteção **CSRF**, e o cookie de sessão é `HttpOnly` e `SameSite=Lax`.
+* Senhas de SMTP e tokens nunca são exibidos na interface. Eles ficam no banco `whois.db`, então **proteja o volume** (`chmod 700 /srv/whois-notification`) ou use variáveis de ambiente.
+* Para acesso pela internet, coloque um proxy reverso com HTTPS na frente (Nginx, Traefik, Caddy) e use `COOKIE_SECURE=1`.
+
+---
+
+## 💻 Desenvolvimento Local
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+DATA_DIR=./data .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
-**Parâmetros de cada nó:**
-*   `domain` (string): O FQDN (Fully Qualified Domain Name) do domínio. **Sem http/https ou www.**
-*   `emails` (array de strings): Lista de caixas postais que receberão o HTML. Deixe vazio `[]` para não enviar e-mail.
-*   `telegrams` (array de strings): Lista de Chat IDs do Telegram (podem ser IDs de usuários privados ou de grupos começando com `-100`). Deixe vazio `[]` para não enviar via telegram.
-*   `days_threshold` (inteiro): A partir de quantos dias restantes a notificação deve começar a ser disparada.
+* Documentação da API: `http://localhost:8000/api/docs` (exige login).
+* Nova migração depois de alterar `app/models.py`:
+  ```bash
+  DATA_DIR=./data .venv/bin/python -m app.dbmigrate revision "descrição da mudança"
+  ```
+
+Estrutura:
+
+```text
+app/
+├── main.py              # FastAPI, ciclo de vida, middlewares
+├── models.py            # Tabelas SQLite
+├── scheduler.py         # Agendamento diário e varreduras sob demanda
+├── migrate_json.py      # Importação do domains.json (v1)
+├── services/
+│   ├── whois_service.py # Consulta WHOIS normalizada
+│   ├── dns_service.py   # DNS, SPF, DMARC, DKIM, DNSSEC
+│   ├── ssl_service.py   # Certificado TLS
+│   ├── http_service.py  # Disponibilidade HTTP
+│   ├── checker.py       # Orquestração, mudanças e política de alertas
+│   ├── notifier.py      # E-mail e Telegram
+│   └── settings.py      # Configurações (banco + ambiente)
+├── routes/              # Páginas e API JSON
+├── templates/           # Interface e template do e-mail
+└── migrations/          # Alembic
+```
 
 ---
 
-## ⏱ Comportamento do Agendador (Scheduler)
+## 🛠 Troubleshooting
 
-O ciclo de vida do script segue o seguinte *pipeline*:
+**1. "Não foi possível obter os dados" / WHOIS falhou.**
+Alguns TLDs (ex.: `.ai`, `.io`) limitam consultas. Veja o erro na aba *Histórico* do domínio. Os outros coletores (DNS, SSL, HTTP) continuam funcionando, e o último valor conhecido é mantido.
 
-1. **Bootstrapping (Arranque):** Ao executar `docker-compose up -d`, o Python inicia o motor, realiza o *bind* das variáveis de ambiente e faz um `check_domains()` imediatamente. Isso é útil para validar se as configurações estão funcionais assim que o serviço sobe.
-2. **Scheduling (Agendamento):** O daemon principal entra em loop (verificando a cada 60 segundos o relógio do sistema).
-3. **Trigger Diário:** Todos os dias, pontualmente às **09:00 AM** (considerando o timezone configurado no container), as regras de checagem disparam e novos relatórios WHOIS são gerados e validados contra os limites configurados.
+**2. O domínio aparece sem data de expiração.**
+Alguns registros não publicam a data, como domínios diretamente sob `.br` (ex.: `registro.br`). O restante do panorama continua disponível.
 
----
+**3. O e-mail não chega.**
+Use **Configurações → Enviar teste**. O erro exato aparece na tela e em **Eventos**. Confira porta e segurança (587 + STARTTLS ou 465 + SSL) e se o provedor exige senha de app. Verifique a caixa de SPAM.
 
-## 🚨 Notificações e Estados de Alerta
+**4. Telegram responde "chat not found".**
+O destinatário precisa enviar `/start` ao bot, ou o bot precisa estar no grupo, antes do primeiro envio.
 
-O sistema trabalha com dois perfis psicológicos de alerta (UX/UI de notificação):
+**5. O logo aparece quebrado no e-mail.**
+Mantenha apenas **uma** imagem começando com `logo.` na pasta mapeada. Sem nenhuma, o logotipo padrão do projeto é usado.
 
-### 🟡 Alerta Preventivo (Faltam dias positivos)
-Quando a conta `Data de Expiração - Data de Hoje` é menor que o `threshold` estipulado, mas é **maior ou igual a 0**.
-*   **E-mail:** Design com cabecalho Vermelho (`#d32f2f`), banner Laranja de atenção e mensagem sugerindo a renovação a fim de evitar suspensão.
-*   **Telegram:** Começa com ícone ⚠️ e avisa que o domínio "expira em X dias".
-
-### 🔴 Alerta Crítico (Domínio Expirado - Dias negativos)
-Quando a data passa do limite estipulado (Dias = -1, -2...). O sistema **não para de alertar** para garantir a recuperação durante o período de "Redemption Grace Period" das registradoras.
-*   **E-mail:** Design emergencial, cabeçalho Sangue (`#b71c1c`), boxes vermelhos e mensagem afirmando que "O Domínio EXPIROU e precisa ser renovado IMEDIATAMENTE".
-*   **Telegram:** Ícones de sirene 🚨 e alerta ostensivo informando os dias em atraso.
-
----
-
-## 🛠 Troubleshooting e Resolução de Problemas
-
-**1. Erro ao consultar a data do domínio.**
-*   *Sintoma:* Logs acusam `Erro ao consultar o domínio...` e enviam resultado "Não foi possível obter os dados".
-*   *Solução:* Alguns TLDs exóticos (ex: `.ai`, `.io`) podem ter servidores WHOIS com bloqueio de rate-limit. Verifique se o seu servidor não está em blacklist nos servidores de quem registra.
-
-**2. O e-mail não chega.**
-*   *Sintoma:* Nenhum e-mail na caixa de entrada.
-*   *Solução:* Verifique os Logs do container. Se constar erro no SMTP, confira suas credenciais, portas (587 TLS ou 465 SSL) e se sua provedora (como Gmail ou Office365) não exige uma "App Password" em vez da senha normal. Verifique sua caixa de SPAM.
-
-**3. O ID do chat no Telegram dá "Chat not found".**
-*   *Sintoma:* A API do Telegram devolve erro 400.
-*   *Solução:* O seu Bot precisa primeiro conversar com a pessoa ou ser adicionado ao grupo ANTES de enviar a mensagem ativa. Envie um `/start` para o bot através da conta/grupo que deve receber as mensagens.
-
-**4. A Imagem (Logo) vai quebrada no e-mail.**
-*   *Solução:* Garanta que há apenas UMA imagem começando com `logo.` na pasta mapeada. O sistema varre e pega o primeiro `logo.*` que encontrar, processando via MIME dinâmico.
+**6. DNSSEC aparece como "não assinado", mas o domínio é assinado.**
+A verificação consulta o registro `DS` em resolvers públicos (1.1.1.1, 8.8.8.8, 9.9.9.9). Se o servidor bloquear DNS externo, o resultado pode sair incorreto.
 
 ---
 
 ## 🤝 Contribuição
 
-Contribuições, issues e feature requests são super bem-vindos! 
+Contribuições, issues e feature requests são super bem-vindos!
 Sinta-se à vontade para checar a página de [issues](https://github.com/AprendendoLinux/whois-notification/issues).
 
 1. Faça o Fork do projeto.
