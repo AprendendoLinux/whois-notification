@@ -110,8 +110,8 @@ O **Whois Notification** foi projetado para mitigar esse risco de forma definiti
 ### Passo 1: Preparar o diretório de dados
 
 ```bash
-sudo mkdir -p /srv/whois-notification
-cd /srv/whois-notification
+sudo mkdir -p /srv/whois
+cd /srv/whois
 ```
 
 Coloque nessa pasta o seu logotipo (ex.: `logo.png`), se quiser usá-lo nos e-mails.
@@ -165,20 +165,30 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - /srv/whois-notification:/app/data
+      # Banco SQLite (whois.db), logo.* dos e-mails, .secret_key
+      # e, se existir, o domains.json antigo (é migrado automaticamente)
+      - /srv/whois:/app/data
     environment:
       - TZ=America/Sao_Paulo
-      # - ADMIN_USER=admin
-      # - ADMIN_PASSWORD=troque_esta_senha
+
+      # Administrador criado na primeira execução (sem isso, a tela /setup pede para criar)
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=troque_esta_senha
+
+      # Use 1 quando estiver atrás de um proxy com HTTPS
       # - COOKIE_SECURE=1
-      # - TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789
+
+      # Opcional: podem ser configurados pela interface.
+      # Se definidos aqui, têm prioridade e ficam bloqueados na tela de Configurações.
+      # - TELEGRAM_BOT_TOKEN=123456789:ABCDEF...
       # - SMTP_SERVER=smtp.exemplo.com.br
       # - SMTP_PORT=587
-      # - SMTP_SECURITY=starttls
+      # - SMTP_SECURITY=starttls      # starttls | ssl | none
       # - SMTP_USER=alertas@exemplo.com.br
-      # - SMTP_PASSWORD=sua_senha_super_secreta
+      # - SMTP_PASSWORD=sua_senha
       # - SMTP_FROM=alertas@exemplo.com.br
-      # - SMTP_FROM_NAME=Whois Notification System
+      # - SMTP_FROM_NAME=Whois Notification
+      # - CHECK_TIME=09:00
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -244,7 +254,7 @@ Alguns servidores WHOIS respondem com dados diferentes conforme o servidor consu
 
 * A interface exige login. As senhas são armazenadas com hash **scrypt**.
 * Todos os formulários têm proteção **CSRF**, e o cookie de sessão é `HttpOnly` e `SameSite=Lax`.
-* Senhas de SMTP e tokens nunca são exibidos na interface. Eles ficam no banco `whois.db`, então **proteja o volume** (`chmod 700 /srv/whois-notification`) ou use variáveis de ambiente.
+* Senhas de SMTP e tokens nunca são exibidos na interface. Eles ficam no banco `whois.db`, então **proteja o volume** (`chmod 700 /srv/whois`) ou use variáveis de ambiente.
 * Para acesso pela internet, coloque um proxy reverso com HTTPS na frente (Nginx, Traefik, Caddy) e use `COOKIE_SECURE=1`.
 
 ---

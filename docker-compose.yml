@@ -4,30 +4,30 @@ services:
     container_name: whois_notification
     ports:
       - "8000:8000"
-    # Banco SQLite (whois.db), logo.* e, se existir, o antigo domains.json para migração
     volumes:
-      - /srv/whois-notification:/app/data
+      # Banco SQLite (whois.db), logo.* dos e-mails, .secret_key
+      # e, se existir, o domains.json antigo (é migrado automaticamente)
+      - /srv/whois:/app/data
     environment:
-      # Fuso horário do agendamento e da interface
       - TZ=America/Sao_Paulo
 
-      # Administrador criado na primeira execução (opcional; sem isso, a tela /setup cria o usuário)
-      # - ADMIN_USER=admin
-      # - ADMIN_PASSWORD=troque_esta_senha
+      # Administrador criado na primeira execução (sem isso, a tela /setup pede para criar)
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=troque_esta_senha
 
-      # Use 1 quando a interface estiver atrás de HTTPS (proxy reverso)
+      # Use 1 quando estiver atrás de um proxy com HTTPS
       # - COOKIE_SECURE=1
 
-      # As configurações abaixo também podem ser feitas pela interface (Configurações).
-      # Quando definidas aqui, têm prioridade e ficam bloqueadas na interface.
-      # - TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789
+      # Opcional: podem ser configurados pela interface.
+      # Se definidos aqui, têm prioridade e ficam bloqueados na tela de Configurações.
+      # - TELEGRAM_BOT_TOKEN=123456789:ABCDEF...
       # - SMTP_SERVER=smtp.exemplo.com.br
       # - SMTP_PORT=587
-      # - SMTP_SECURITY=starttls        # starttls | ssl | none
+      # - SMTP_SECURITY=starttls      # starttls | ssl | none
       # - SMTP_USER=alertas@exemplo.com.br
-      # - SMTP_PASSWORD=sua_senha_super_secreta
+      # - SMTP_PASSWORD=sua_senha
       # - SMTP_FROM=alertas@exemplo.com.br
-      # - SMTP_FROM_NAME=Whois Notification System
+      # - SMTP_FROM_NAME=Whois Notification
       # - CHECK_TIME=09:00
     restart: unless-stopped
     logging:
