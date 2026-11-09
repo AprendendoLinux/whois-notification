@@ -1,0 +1,30 @@
+{% from "macros.html" import health_badge, days_ring %}
+{% set busy = running_all or running %}
+<div class="fleet" id="fleet"
+     hx-get="/partials/fleet{{ '?was=1' if busy }}" hx-trigger="every {{ '4s' if busy else '60s' }}" hx-swap="outerHTML">
+  {% for d in domains %}
+  {% set label, cls = HEALTH[d.health] %}
+  <a class="dcard {{ cls }}" href="/domains/{{ d.id }}" data-n="{{ d.name }}" data-h="{{ d.health }}" x-show="match($el.dataset.n, $el.dataset.h)">
+    <div class="dcard-top">
+      <div style="min-width:0">
+        <div class="dname">{{ d.name }}</div>
+        <div class="dmeta">{{ d.registrar or "Registrador desconhecido" }}</div>
+      </div>
+      {% if d.id in running %}<span class="badge"><span class="dot pulse"></span>Varrendo</span>{% else %}{{ health_badge(d.health) }}{% endif %}
+    </div>
+    <div class="dcard-body">
+      {{ days_ring(d.days_left, d.expiry_class) }}
+      <div class="dstats">
+        <div class="dstat"><div class="k">Expira</div><div class="v">{{ d.expiration_date|date }}</div></div>
+        <div class="dstat"><div class="k">SSL</div><div class="v {{ 'crit-t' if d.ssl_valid == false or (d.ssl_days_left is not none and d.ssl_days_left <= d.ssl_threshold) }}">{% if not d.monitor_ssl %}<span class="muted">off</span>{% elif d.ssl_days_left is not none and d.ssl_days_left < 0 %}EXPIRADO{% else %}{{ d.ssl_days_left|days }}{% endif %}</div></div>
+        <div class="dstat"><div class="k">HTTP</div><div class="v {{ 'ok-t' if d.http_status and d.http_status < 400 else 'crit-t' if d.http_status else '' }}">{{ d.http_status or "—" }}{% if d.http_ms %} <span class="muted">· {{ d.http_ms }}ms</span>{% endif %}</div></div>
+        <div class="dstat"><div class="k">E-mail</div><div class="v">{{ d.email_score ~ "/100" if d.email_score is not none else "—" }}</div></div>
+      </div>
+    </div>
+    <div class="dcard-foot">
+      <span>DNSSEC {{ "✓" if d.dnssec == "signed" else "✗" if d.dnssec else "?" }} · {{ (d.nameservers or [])|length }} NS</span>
+      <span>{{ d.last_checked_at|ago }}{% if d.last_error %} · <span class="warn-t" title="{{ d.last_error }}">⚠</span>{% endif %}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>

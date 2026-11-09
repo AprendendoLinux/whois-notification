@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Painel{% endblock %}
+{% block crumb %}// CENTRAL DE MONITORAMENTO{% endblock %}
+{% block heading %}Visão geral{% endblock %}
+{% block head %}<script src="{{ url_for('static', path='vendor/echarts.min.js') }}" defer></script>{% endblock %}
+{% block top_actions %}
+<form method="post" action="/check-all">
+  <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+  <button class="btn" type="submit" {% if running_all %}disabled{% endif %} title="Verificar todos os domínios agora">
+    <span class="{{ 'spin' if running_all }}" style="display:inline-flex">{{ icon("refresh") }}</span><span>{{ "Varrendo…" if running_all else "Varrer tudo" }}</span>
+  </button>
+</form>
+<a class="btn primary" href="/domains/new">{{ icon("plus") }}<span>Domínio</span></a>
+{% endblock %}
+
+{% block content %}
+{% if channel_warnings %}
+<div class="flash"><div class="warn" role="alert">Há contatos cadastrados, mas o canal {{ channel_warnings|join(" e ") }} não está configurado. Esses alertas <b>não serão enviados</b>. <a href="/settings">Configurar agora →</a></div></div>
+{% endif %}
+<section class="kpis" aria-label="Resumo">
+  <div class="kpi total"><div class="label">Domínios</div><div class="value">{{ total }}</div><div class="sub">{{ stats.disabled }} pausado(s)</div></div>
+  <div class="kpi ok"><div class="label">Operacionais</div><div class="value">{{ stats.ok }}</div><div class="sub">fora da janela de alerta</div></div>
+  <div class="kpi warn"><div class="label">Atenção</div><div class="value">{{ stats.warning }}</div><div class="sub">dentro do limite</div></div>
+  <div class="kpi crit"><div class="label">Críticos</div><div class="value">{{ stats.critical }}</div><div class="sub">≤ 7 dias ou SSL ≤ 3</div></div>
+  <div class="kpi dead"><div class="label">Expirados</div><div class="value">{{ stats.expired }}</div><div class="sub">{{ stats.unknown }} sem dados</div></div>
+</section>
+
+{% if total == 0 %}
+<section class="panel corners empty">
+  <div class="big">Nenhum domínio no radar</div>
+  <p>Cadastre o primeiro domínio para começar o monitoramento de WHOIS, DNS, SSL e HTTP.</p>
+  <a class="btn primary" href="/domains/new">{{ icon("plus") }} Cadastrar domínio</a>
+</section>
+{% else %}
+<section class="grid grid-3">
+  <div class="panel corners span-2">
+    <div class="panel-head"><h2>Radar de expirações</h2><span class="hint">próximos 12 meses · domínio ◆ · SSL ●</span></div>
+    <div id="chart-timeline" class="chart" role="img" aria-label="Linha do tempo de expirações"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>Saúde da frota</h2></div>
+    <div id="chart-health" class="chart" role="img" aria-label="Distribuição de status"></div>
+  </div>
+</section>
+
+<section class="panel" x-data="{ q: '', f: 'all', match(n, h) { return (this.f === 'all' || this.f === h) && n.includes(this.q.trim().toLowerCase()) } }">
+  <div class="panel-head">
+    <h2>Domínios monitorados</h2>
+    <div class="toolbar">
+      <input type="search" placeholder="Filtrar domínio…" x-model="q" aria-label="Filtrar domínio">
+      <div class="seg" role="group" aria-label="Filtrar por status">
+        <button type="button" :class="f==='all' && 'on'" @click="f='all'">Todos</button>
+        <button type="button" :class="f==='expired' && 'on'" @click="f='expired'">Expirados</button>
+        <button type="button" :class="f==='critical' && 'on'" @click="f='critical'">Críticos</button>
+        <button type="button" :class="f==='warning' && 'on'" @click="f='warning'">Atenção</button>
+        <button type="button" :class="f==='ok' && 'on'" @click="f='ok'">OK</button>
+      </div>
+    </div>
+  </div>
+  {% include "partials/fleet.html" %}
+</section>
+
+<section class="grid grid-2">
+  <div class="panel">
+    <div class="panel-head"><h2>Mudanças recentes</h2><a class="hint" href="/notifications">ver tudo →</a></div>
+    {% if recent_changes %}
+    <ul class="timeline">
+      {% for c in recent_changes %}
+      <li class="{{ c.severity }}">
+        <div class="when">{{ c.created_at|datetime }} · <a href="/domains/{{ c.domain_id }}">{{ c.domain.name }}</a></div>
+        <div class="what">{{ c.field }}</div>
+        <div class="diff"><span class="old">{{ c.old_value }}</span> → <span class="new">{{ c.new_value }}</span></div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Nenhuma alteração detectada até agora. Mudanças de nameserver, registrador, status, MX e DNSSEC aparecem aqui.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>Sistema</h2></div>
+    <dl class="kv">
+      <dt>Próxima varredura</dt><dd>{{ next_run|datetime if next_run else "—" }}</dd>
+      <dt>Varredura em curso</dt><dd>{% if running_all or running %}<span class="badge"><span class="dot pulse"></span>Sim</span>{% else %}Não{% endif %}</dd>
+      <dt>Alertas enviados</dt><dd><span class="ok-t">{{ sent_ok }}</span> com sucesso · <span class="{{ 'crit-t' if sent_fail else 'muted' }}">{{ sent_fail }}</span> com falha</dd>
+      <dt>Banco de dados</dt><dd>SQLite · whois.db</dd>
+    </dl>
+  </div>
+</section>
+
+<script type="application/json" id="fleet-data">{{ domains_json|safe }}</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if total %}<script>document.addEventListener("DOMContentLoaded", () => WN.dashboardCharts());</script>{% endif %}
+{% endblock %}

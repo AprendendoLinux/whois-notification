@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Contatos{% endblock %}
+{% block crumb %}// CANAIS DE ALERTA{% endblock %}
+{% block heading %}Contatos{% endblock %}
+
+{% block content %}
+<section class="panel corners">
+  <div class="panel-head"><h2>Novo contato</h2></div>
+  <form class="row" method="post" action="/contacts" style="align-items:end" x-data="{ kind: 'email' }">
+    <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+    <div class="field">
+      <label for="k">Canal</label>
+      <select id="k" name="kind" x-model="kind"><option value="email">E-mail</option><option value="telegram">Telegram</option></select>
+    </div>
+    <div class="field">
+      <label for="v" x-text="kind === 'email' ? 'Endereço de e-mail' : 'Chat ID'">Endereço</label>
+      <input id="v" class="mono" type="text" name="value" required :placeholder="kind === 'email' ? 'infra@empresa.com.br' : '-10022222222'">
+    </div>
+    <div class="field">
+      <label for="n">Nome (opcional)</label>
+      <input id="n" type="text" name="name" placeholder="Equipe de infraestrutura">
+    </div>
+    <div class="field"><button class="btn primary" type="submit">{{ icon("plus") }} Adicionar</button></div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ contacts|length }} contato(s)</h2><span class="hint">um contato pode receber alertas de vários domínios</span></div>
+  {% if contacts %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Canal</th><th>Nome</th><th>Destino</th><th>Domínios</th><th style="text-align:right">Ações</th></tr></thead>
+      <tbody>
+      {% for c in contacts %}
+      <tr x-data="{ edit: false }">
+        <td><span class="badge {{ 'magenta' if c.kind == 'telegram' else '' }}">{{ "E-mail" if c.kind == "email" else "Telegram" }}</span></td>
+        <td>
+          <span x-show="!edit">{{ c.name or "—" }}</span>
+          <form x-show="edit" x-cloak method="post" action="/contacts/{{ c.id }}/rename" style="display:flex;gap:6px">
+            <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+            <input type="text" name="name" value="{{ c.name }}" aria-label="Nome do contato">
+            <button class="btn sm" type="submit">OK</button>
+          </form>
+        </td>
+        <td class="mono">{{ c.value }}</td>
+        <td>{% for d in c.domains %}<a class="chip" href="/domains/{{ d.id }}">{{ d.name }}</a>{% else %}<span class="muted">nenhum</span>{% endfor %}</td>
+        <td>
+          <div class="actions" style="justify-content:flex-end">
+            <button class="btn ghost sm" type="button" @click="edit = !edit" title="Renomear">{{ icon("edit") }}</button>
+            <form method="post" action="/contacts/{{ c.id }}/test">
+              <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+              <button class="btn sm" type="submit" title="Enviar mensagem de teste">{{ icon("send") }} Testar</button>
+            </form>
+            <form method="post" action="/contacts/{{ c.id }}/delete" onsubmit="return confirm('Remover este contato de todos os domínios?')">
+              <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+              <button class="btn danger sm" type="submit" title="Remover">{{ icon("trash") }}</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted">Nenhum contato cadastrado.</p>{% endif %}
+</section>
+{% endblock %}

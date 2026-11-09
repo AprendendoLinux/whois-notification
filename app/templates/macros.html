@@ -1,0 +1,61 @@
+{% macro logo_mark(cls="brand-mark") -%}
+<svg class="{{ cls }}" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="lg-mark" x1="0" y1="0" x2="48" y2="48">
+      <stop offset="0" stop-color="#00e5ff"/><stop offset="1" stop-color="#ff2bd6"/>
+    </linearGradient>
+  </defs>
+  <path d="M24 2 43 13v22L24 46 5 35V13z" stroke="url(#lg-mark)" stroke-width="2"/>
+  <circle cx="24" cy="24" r="11" stroke="#00e5ff" stroke-opacity=".5" stroke-width="1.2"/>
+  <circle cx="24" cy="24" r="5" stroke="#00e5ff" stroke-opacity=".8" stroke-width="1.2"/>
+  <path d="M24 24 33 15" stroke="#00e5ff" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="33" cy="15" r="2.2" fill="#ff2bd6"/>
+</svg>
+{%- endmacro %}
+
+{% macro health_badge(h) -%}
+{% set label, cls = HEALTH[h] %}
+<span class="badge {{ cls }}"><span class="dot"></span>{{ label }}</span>
+{%- endmacro %}
+
+{# Anel de contagem regressiva. frac 0–1. #}
+{% macro ring_gauge(frac, num, unit, cls="cyan", size=92, stroke=7, big=false) -%}
+{% set r = (size - stroke) / 2 - 4 %}
+{% set c = 2 * 3.14159265 * r %}
+<div class="ring {{ cls }}{% if big %} lg{% endif %}" style="width:{{ size }}px;height:{{ size }}px">
+  <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 {{ size }} {{ size }}" aria-hidden="true">
+    <circle class="ticks" cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r + stroke/2 + 3 }}" fill="none" stroke-width="1" stroke-dasharray="1 5"/>
+    <circle class="track" cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke-width="{{ stroke }}"/>
+    <circle class="bar" cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke-width="{{ stroke }}"
+            stroke-dasharray="{{ '%.2f'|format(c) }}" stroke-dashoffset="{{ '%.2f'|format(c * (1 - frac)) }}"/>
+  </svg>
+  <div class="center"><span class="num{{ ' long' if (num|string|length) > 3 }}">{{ num }}</span><span class="unit">{{ unit }}</span></div>
+</div>
+{%- endmacro %}
+
+{% macro days_ring(days, health_cls, size=92, big=false) -%}
+{% if days is none %}{{ ring_gauge(0, "—", "sem dados", "muted", size, big=big) }}
+{% elif days < 0 %}{{ ring_gauge(1, days|abs, "dias atrás", "dead", size, big=big) }}
+{% else %}{{ ring_gauge(ring(days), days, "dias", health_cls, size, big=big) }}{% endif %}
+{%- endmacro %}
+
+{% macro icon(name) -%}
+{% if name == "grid" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+{% elif name == "plus" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+{% elif name == "users" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" stroke-linecap="round"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.8.7 3 2.4 3.5 5.2" stroke-linecap="round"/></svg>
+{% elif name == "bell" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" stroke-linejoin="round"/><path d="M10 21h4" stroke-linecap="round"/></svg>
+{% elif name == "cog" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke-linecap="round"/></svg>
+{% elif name == "radar" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12 18 6" stroke-linecap="round"/></svg>
+{% elif name == "refresh" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+{% elif name == "edit" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h4L19 9l-4-4L4 16z" stroke-linejoin="round"/></svg>
+{% elif name == "trash" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linejoin="round"/></svg>
+{% elif name == "menu" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+{% elif name == "back" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+{% elif name == "send" %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4z" stroke-linejoin="round"/></svg>
+{% endif %}
+{%- endmacro %}
+
+{% macro flashes(request) -%}
+{% set items = pop_flash(request) %}
+{% if items %}<div class="flash">{% for f in items %}<div class="{{ f.kind }}" role="status">{{ f.msg }}</div>{% endfor %}</div>{% endif %}
+{%- endmacro %}

@@ -1,0 +1,12 @@
+{% extends "auth_base.html" %}
+{% block title %}Entrar{% endblock %}
+{% block content %}
+<form class="form" method="post" action="/login">
+  <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+  <div><h2>Acesso restrito</h2><p class="muted" style="margin:6px 0 0">Identifique-se para acessar o painel.</p></div>
+  {% if error %}<div class="flash"><div class="err" role="alert">{{ error }}</div></div>{% endif %}
+  <div class="field"><label for="u">Usuário</label><input id="u" type="text" name="username" value="{{ username or '' }}" autocomplete="username" required autofocus></div>
+  <div class="field"><label for="p">Senha</label><input id="p" type="password" name="password" autocomplete="current-password" required></div>
+  <button class="btn primary" type="submit">Entrar</button>
+</form>
+{% endblock %}

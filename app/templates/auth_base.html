@@ -1,0 +1,22 @@
+{% from "macros.html" import logo_mark %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#04060c">
+  <title>{% block title %}{% endblock %} · Whois Notification</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}?v={{ APP_VERSION }}">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="brand">{{ logo_mark() }}<span class="brand-name">WHOIS<br>NOTIFICATION<small>DOMAIN CONTROL</small></span></div>
+      <div class="panel corners">
+        {% block content %}{% endblock %}
+      </div>
+      <p class="muted mono" style="text-align:center;margin-top:16px;font-size:11px">v{{ APP_VERSION }}</p>
+    </div>
+  </div>
+</body>
+</html>

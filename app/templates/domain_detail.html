@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, health_badge, days_ring, ring_gauge %}
+{% block title %}{{ d.name }}{% endblock %}
+{% block crumb %}// PANORAMA DO DOMÍNIO{% endblock %}
+{% block heading %}{{ d.name }}{% endblock %}
+{% block head %}<script src="{{ url_for('static', path='vendor/echarts.min.js') }}" defer></script>{% endblock %}
+{% block top_actions %}
+<a class="btn ghost sm" href="/">{{ icon("back") }}<span>Painel</span></a>
+{% endblock %}
+
+{% set label, hcls = HEALTH[d.health] %}
+{% set w = last_ok.whois if last_ok and last_ok.whois else {} %}
+{% set dns = (latest.dns if latest and latest.dns else (last_ok.dns if last_ok else None)) or {} %}
+{% set ssl = latest.ssl if latest and latest.ssl else {} %}
+{% set http = latest.http if latest and latest.http else {} %}
+{% set em = dns.email or {} %}
+
+{% block content %}
+<!-- ============================================================ HERO -->
+<section class="panel corners hero">
+  <div class="scanline"></div>
+  <div style="min-width:0">
+    <div class="hero-name">{{ d.name }}</div>
+    <div class="hero-sub">
+      {{ health_badge(d.health) }}
+      {% if d.ssl_valid == false %}<span class="badge crit"><span class="dot"></span>SSL inválido</span>{% endif %}
+      {% if d.dnssec == "signed" %}<span class="badge violet"><span class="dot"></span>DNSSEC</span>{% endif %}
+      <span>{{ d.registrar or "Registrador desconhecido" }}</span>
+      <span class="muted">· última varredura {{ d.last_checked_at|ago }}</span>
+    </div>
+    {% if d.expiration_date %}
+    <div x-data="countdown('{{ d.expiration_date.isoformat() }}')" x-init="start()">
+      <div class="countdown" :class="expired && 'expired'" aria-label="Contagem regressiva até a expiração">
+        <div class="cell"><div class="n" x-text="d"></div><div class="l">dias</div></div>
+        <div class="cell"><div class="n" x-text="h"></div><div class="l">horas</div></div>
+        <div class="cell"><div class="n" x-text="m"></div><div class="l">min</div></div>
+        <div class="cell"><div class="n" x-text="s"></div><div class="l">seg</div></div>
+      </div>
+      <p class="muted mono" style="margin:10px 0 0;font-size:12px"><span x-text="expired ? 'EXPIROU EM' : 'EXPIRA EM'"></span> {{ d.expiration_date|date }} · {{ d.expiration_date.strftime("%H:%M") }} UTC</p>
+    </div>
+    {% elif d.last_checked_at %}
+    <p class="muted" style="margin-top:16px">O WHOIS deste domínio não informa a data de expiração{% if d.name.endswith('.br') and d.name.count('.') == 1 %} (domínios diretamente sob .br, como <code>registro.br</code>, não expiram){% endif %}.</p>
+    {% endif %}
+  </div>
+  <div class="actions" style="flex-direction:column;align-items:stretch">
+    {% include "partials/check_button.html" %}
+    <a class="btn ghost" href="/domains/{{ d.id }}/edit">{{ icon("edit") }} Editar</a>
+    <form method="post" action="/domains/{{ d.id }}/delete" onsubmit="return confirm('Remover {{ d.name }} e todo o histórico?')">
+      <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+      <button class="btn danger" type="submit" style="width:100%">{{ icon("trash") }} Remover</button>
+    </form>
+  </div>
+</section>
+
+{% if not d.last_checked_at %}
+<section class="panel empty">
+  <div class="big">Primeira varredura em andamento…</div>
+  <p>Consultando WHOIS, DNS, certificado e HTTP. A página recarrega quando terminar.</p>
+</section>
+{% else %}
+
+{% if d.last_error %}
+<div class="flash"><div class="warn"><b>Falhas parciais na última varredura:</b><br><span class="mono" style="white-space:pre-line">{{ d.last_error }}</span></div></div>
+{% endif %}
+
+<!-- ========================================================== GAUGES -->
+<section class="gauges">
+  <div class="panel gauge-card">
+    <span class="cap">Registro</span>
+    {{ days_ring(d.days_left, d.expiry_class, 120, true) }}
+    <span class="note">alerta ≤ {{ d.days_threshold }} dias</span>
+  </div>
+  <div class="panel gauge-card">
+    <span class="cap">Certificado SSL</span>
+    {% if not d.monitor_ssl %}{{ ring_gauge(0, "off", "desativado", "muted", 120, big=true) }}
+    {% else %}
+      {% set sd = d.ssl_days_left %}
+      {% set scls = "dead" if sd is not none and sd < 0 else "crit" if d.ssl_valid == false or (sd is not none and sd <= 3) else "warn" if sd is not none and sd <= d.ssl_threshold else "ok" %}
+      {% if sd is none %}{{ days_ring(none, "muted", 120, true) }}
+      {% elif sd < 0 %}{{ ring_gauge(1, sd|abs, "dias atrás", "dead", 120, big=true) }}
+      {% else %}{{ ring_gauge(ring(sd, ssl.lifetime_days or 90), sd, "dias", scls, 120, big=true) }}{% endif %}
+    {% endif %}
+    <span class="note">{{ ssl.issuer or "—" }}</span>
+  </div>
+  <div class="panel gauge-card">
+    <span class="cap">Segurança de e-mail</span>
+    {% set es = d.email_score %}
+    {{ ring_gauge((es or 0) / 100, es if es is not none else "—", "/ 100", "ok" if (es or 0) >= 80 else "warn" if (es or 0) >= 50 else "crit", 120, big=true) }}
+    <span class="note">SPF · DMARC · DKIM</span>
+  </div>
+  <div class="panel gauge-card">
+    <span class="cap">Disponibilidade</span>
+    {% set hs = http.status %}
+    {{ ring_gauge(1 if hs and hs < 400 else 0.5 if hs and hs < 500 else 0, hs or "OFF", (http.ms ~ " ms") if http.ms else "sem resposta", "ok" if hs and hs < 400 else "warn" if hs and hs < 500 else "crit", 120, big=true) }}
+    <span class="note">{{ http.http_version or "" }} {{ "· HTTPS" if http.https else "· sem HTTPS" if hs else "" }}</span>
+  </div>
+</section>
+
+<!-- ============================================================ TABS -->
+<section class="panel" x-data="{ tab: (location.hash || '#geral').slice(1) }" x-init="$watch('tab', v => history.replaceState(null, '', '#' + v))">
+  <div class="tabs" role="tablist">
+    {% for key, name in [("geral","Visão geral"),("whois","WHOIS"),("dns","DNS"),("email","E-mail"),("ssl","SSL / TLS"),("http","HTTP"),("historico","Histórico"),("eventos","Eventos"),("bruto","WHOIS bruto")] %}
+    <button type="button" role="tab" :class="tab==='{{ key }}' && 'on'" :aria-selected="tab==='{{ key }}'" @click="tab='{{ key }}'">{{ name }}</button>
+    {% endfor %}
+  </div>
+
+  <!-- Visão geral -->
+  <div class="tab-body" x-show="tab==='geral'">
+    <div class="grid grid-2">
+      <div>
+        <h3 style="margin-bottom:10px">Identidade</h3>
+        <dl class="kv">
+          <dt>Domínio</dt><dd>{{ d.name }}</dd>
+          <dt>Registrador</dt><dd>{{ d.registrar or "—" }}</dd>
+          <dt>Titular</dt><dd>{{ w.registrant or "—" }}{% if w.registrant_id %} <span class="muted">({{ w.registrant_id }})</span>{% endif %}</dd>
+          <dt>País</dt><dd>{{ w.country or "—" }}</dd>
+          <dt>Criado em</dt><dd>{{ d.creation_date|date }}{% if d.creation_date %} <span class="muted">· {{ d.creation_date|age }}</span>{% endif %}</dd>
+          <dt>Expira em</dt><dd class="{{ d.expiry_class }}-t">{{ d.expiration_date|date }} <span class="muted">· {{ d.days_left|days }}</span></dd>
+        </dl>
+      </div>
+      <div>
+        <h3 style="margin-bottom:10px">Infraestrutura</h3>
+        <dl class="kv">
+          <dt>Nameservers</dt><dd>{% for ns in d.nameservers or [] %}<span class="chip">{{ ns }}</span>{% else %}—{% endfor %}</dd>
+          <dt>IPv4</dt><dd>{% for a in (dns.records or {}).get("A", []) %}<span class="chip">{{ a }}</span>{% else %}—{% endfor %}</dd>
+          <dt>IPv6</dt><dd>{% for a in (dns.records or {}).get("AAAA", []) %}<span class="chip">{{ a }}</span>{% else %}—{% endfor %}</dd>
+          <dt>E-mail (MX)</dt><dd>{% for a in (dns.records or {}).get("MX", []) %}<span class="chip">{{ a }}</span>{% else %}—{% endfor %}</dd>
+          <dt>DNSSEC</dt><dd>{{ "Assinado ✓" if dns.dnssec_signed else "Não assinado" }}</dd>
+          <dt>Status</dt><dd>{% for s in d.whois_status or [] %}<span class="chip">{{ s }}</span>{% else %}—{% endfor %}</dd>
+        </dl>
+      </div>
+    </div>
+    {% if d.notes %}<h3 style="margin:22px 0 8px">Anotações</h3><p class="dim" style="white-space:pre-line;margin:0">{{ d.notes }}</p>{% endif %}
+    <h3 style="margin:22px 0 8px">Destinatários dos alertas</h3>
+    {% for c in d.contacts %}<span class="chip">{{ "✉" if c.kind == "email" else "✈" }} {{ c.label }}</span>{% else %}<p class="warn-t" style="margin:0">Nenhum destinatário: este domínio não envia alertas. <a href="/domains/{{ d.id }}/edit">Adicionar →</a></p>{% endfor %}
+  </div>
+
+  <!-- WHOIS -->
+  <div class="tab-body" x-show="tab==='whois'" x-cloak>
+    {% if w %}
+    <dl class="kv">
+      <dt>Domínio</dt><dd>{{ w.domain }}</dd>
+      <dt>Registrador</dt><dd>{{ w.registrar or "—" }}{% if w.registrar_url %} · <a href="{{ w.registrar_url }}" target="_blank" rel="noopener noreferrer">{{ w.registrar_url }}</a>{% endif %}</dd>
+      <dt>Servidor WHOIS</dt><dd>{{ w.whois_server or "—" }}</dd>
+      <dt>Criação</dt><dd>{{ w.creation_date|date }}</dd>
+      <dt>Atualização</dt><dd>{{ w.updated_date|date }}</dd>
+      <dt>Expiração</dt><dd>{{ w.expiration_date|date }}</dd>
+      <dt>Status EPP</dt><dd>{% for s in w.status %}<span class="chip {{ 'danger' if s.lower() in ['clienthold','serverhold','redemptionperiod','pendingdelete'] }}">{{ s }}</span>{% else %}—{% endfor %}</dd>
+      <dt>Nameservers</dt><dd>{% for ns in w.nameservers %}<span class="chip">{{ ns }}</span>{% else %}—{% endfor %}</dd>
+      <dt>DNSSEC (WHOIS)</dt><dd>{{ w.dnssec or "—" }}</dd>
+      <dt>Titular</dt><dd>{{ w.registrant or "—" }}</dd>
+      <dt>Documento</dt><dd>{{ w.registrant_id or "—" }}</dd>
+      <dt>País</dt><dd>{{ w.country or "—" }}</dd>
+      <dt>Contatos</dt><dd>{% for e in w.emails %}<span class="chip">{{ e }}</span>{% else %}—{% endfor %}</dd>
+    </dl>
+    <p class="muted" style="font-size:12px;margin:14px 0 0">Consulta bem-sucedida em {{ last_ok.created_at|datetime }}.</p>
+    {% else %}<p class="muted">Nenhuma consulta WHOIS bem-sucedida até agora.</p>{% endif %}
+  </div>
+
+  <!-- DNS -->
+  <div class="tab-body" x-show="tab==='dns'" x-cloak>
+    {% if dns.records %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th style="width:90px">Tipo</th><th>Valor</th></tr></thead>
+        <tbody>
+        {% for t in ["A","AAAA","NS","MX","TXT","CAA","SOA"] %}
+          {% for v in dns.records.get(t, []) %}
+          <tr><td><span class="badge {{ 'violet' if t in ['TXT','CAA'] else 'magenta' if t == 'MX' else '' }}">{{ t }}</span></td><td class="mono">{{ v }}</td></tr>
+          {% endfor %}
+        {% endfor %}
+        {% if dns.www %}<tr><td><span class="badge muted">www</span></td><td class="mono">{{ dns.www|join(", ") }}</td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:12px;margin:14px 0 0">CAA {{ "presente: só as autoridades listadas podem emitir certificados" if dns.caa_present else "ausente: qualquer autoridade certificadora pode emitir certificados" }}.</p>
+    {% else %}<p class="muted">Sem dados de DNS.</p>{% endif %}
+  </div>
+
+  <!-- E-mail -->
+  <div class="tab-body" x-show="tab==='email'" x-cloak>
+    {% if em %}
+    {% for key, name, desc in [("spf","SPF","Quais servidores podem enviar e-mail pelo domínio"),("dmarc","DMARC","O que fazer com e-mails que falham na autenticação"),("dkim","DKIM","Assinatura criptográfica das mensagens")] %}
+    {% set item = em[key] %}
+    <div class="sec-item">
+      <div class="sec-icon grade {{ item.grade }}">{{ name[:2] }}</div>
+      <div style="min-width:0;flex:1">
+        <div><b>{{ name }}</b> <span class="grade {{ item.grade }}">· {{ {"good":"FORTE","ok":"BOM","weak":"FRACO","bad":"AUSENTE/INSEGURO","unknown":"INDETERMINADO"}[item.grade] }}</span></div>
+        <div class="muted" style="font-size:12px">{{ desc }}</div>
+        <div class="dim" style="margin-top:6px">{{ item.note }}</div>
+        {% if item.record %}<pre class="raw" style="margin-top:8px;max-height:120px">{{ item.record }}</pre>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}<p class="muted">Sem dados.</p>{% endif %}
+  </div>
+
+  <!-- SSL -->
+  <div class="tab-body" x-show="tab==='ssl'" x-cloak>
+    {% if ssl %}
+    <dl class="kv">
+      <dt>Validação</dt><dd>{% if ssl.valid %}<span class="ok-t">Cadeia confiável ✓</span>{% else %}<span class="crit-t">Inválido: {{ ssl.verify_error }}</span>{% endif %}</dd>
+      <dt>Host</dt><dd>{{ ssl.host }}</dd>
+      <dt>Assunto (CN)</dt><dd>{{ ssl.subject or "—" }}</dd>
+      <dt>Emissor</dt><dd>{{ ssl.issuer }}{% if ssl.issuer_cn and ssl.issuer_cn != ssl.issuer %} <span class="muted">({{ ssl.issuer_cn }})</span>{% endif %}</dd>
+      <dt>Válido desde</dt><dd>{{ ssl.not_before|date }}</dd>
+      <dt>Válido até</dt><dd>{{ ssl.not_after|date }} <span class="muted">· {{ d.ssl_days_left|days }}</span></dd>
+      <dt>Vida útil</dt><dd>{{ ssl.lifetime_days }} dias</dd>
+      <dt>Protocolo</dt><dd>{{ ssl.tls_version }}</dd>
+      <dt>Chave</dt><dd>{{ ssl.key_type }} {{ ssl.key_size or "" }} bits · {{ ssl.signature_algorithm or "" }}</dd>
+      <dt>Serial</dt><dd>{{ ssl.serial }}</dd>
+      <dt>Nomes cobertos</dt><dd>{% for s in ssl.sans[:40] %}<span class="chip">{{ s }}</span>{% endfor %}{% if ssl.san_count > 40 %} <span class="muted">+{{ ssl.san_count - 40 }}</span>{% endif %}</dd>
+    </dl>
+    {% elif not d.monitor_ssl %}<p class="muted">Monitoramento de SSL desativado para este domínio.</p>
+    {% else %}<p class="muted">Não foi possível obter o certificado (a porta 443 não respondeu).</p>{% endif %}
+  </div>
+
+  <!-- HTTP -->
+  <div class="tab-body" x-show="tab==='http'" x-cloak>
+    {% if http %}
+    <dl class="kv">
+      <dt>Situação</dt><dd>{% if http.online %}<span class="ok-t">Online</span>{% else %}<span class="crit-t">Offline</span>{% endif %}</dd>
+      {% if http.error %}<dt>Erro</dt><dd class="crit-t">{{ http.error }}</dd>{% endif %}
+      <dt>Status</dt><dd>{{ http.status or "—" }} {{ http.reason or "" }}</dd>
+      <dt>Tempo de resposta</dt><dd>{{ http.ms ~ " ms" if http.ms else "—" }}</dd>
+      <dt>URL final</dt><dd>{{ http.final_url or "—" }}</dd>
+      <dt>Redirecionamentos</dt><dd>{% for r in http.redirects or [] %}<div>{{ r.status }} → {{ r.url }}</div>{% else %}Nenhum{% endfor %}</dd>
+      <dt>Servidor</dt><dd>{{ http.server or "—" }}</dd>
+      <dt>Protocolo</dt><dd>{{ http.http_version or "—" }}</dd>
+      <dt>Cabeçalhos de segurança</dt>
+      <dd>{% for h, present in (http.security_headers or {}).items() %}<span class="chip {{ '' if present else 'danger' }}">{{ "✓" if present else "✗" }} {{ h }}</span>{% endfor %}</dd>
+    </dl>
+    {% else %}<p class="muted">Sem dados.</p>{% endif %}
+  </div>
+
+  <!-- Histórico -->
+  <div class="tab-body" x-show="tab==='historico'" x-cloak x-init="$watch('tab', v => v === 'historico' && !window._h && (window._h = 1, setTimeout(() => WN.historyChart({{ d.id }}), 30)))">
+    <h3 style="margin-bottom:10px">Tempo de resposta</h3>
+    <div id="chart-history" class="chart sm"></div>
+    <h3 style="margin:22px 0 10px">Mudanças detectadas</h3>
+    {% if changes %}
+    <ul class="timeline">
+      {% for c in changes %}
+      <li class="{{ c.severity }}">
+        <div class="when">{{ c.created_at|datetime }}</div>
+        <div class="what">{{ c.field }}</div>
+        <div class="diff"><span class="old">{{ c.old_value }}</span> → <span class="new">{{ c.new_value }}</span></div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Nenhuma mudança detectada desde o cadastro.</p>{% endif %}
+    <h3 style="margin:22px 0 10px">Varreduras</h3>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Quando</th><th>Resultado</th><th>Duração</th><th>HTTP</th><th>Observações</th></tr></thead>
+        <tbody>
+        {% for c in checks[:30] %}
+        <tr>
+          <td class="mono">{{ c.created_at|datetime }}</td>
+          <td>{% if c.success and not c.error %}<span class="badge ok">OK</span>{% elif c.success %}<span class="badge warn">Parcial</span>{% else %}<span class="badge crit">Falha</span>{% endif %}</td>
+          <td class="mono">{{ c.duration_ms }} ms</td>
+          <td class="mono">{{ (c.http or {}).get("status") or "—" }}</td>
+          <td class="mono muted" style="white-space:pre-line">{{ c.error or "" }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Eventos -->
+  <div class="tab-body" x-show="tab==='eventos'" x-cloak>
+    {% if notifications %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Quando</th><th>Tipo</th><th>Canal</th><th>Destino</th><th>Resultado</th></tr></thead>
+        <tbody>
+        {% for n in notifications %}
+        <tr>
+          <td class="mono">{{ n.created_at|datetime }}</td>
+          <td>{{ {"domain_expiry":"Expiração","ssl_expiry":"SSL","change":"Mudança","test":"Teste"}.get(n.kind, n.kind) }}{% if n.days_left is not none %} <span class="muted">({{ n.days_left }}d)</span>{% endif %}</td>
+          <td>{{ "E-mail" if n.channel == "email" else "Telegram" }}</td>
+          <td class="mono">{{ n.target }}</td>
+          <td>{% if n.success %}<span class="badge ok">Enviado</span>{% else %}<span class="badge crit" title="{{ n.error }}">Falhou</span><div class="muted mono" style="font-size:11px;margin-top:4px">{{ n.error }}</div>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="muted">Nenhum alerta enviado para este domínio ainda.</p>{% endif %}
+  </div>
+
+  <!-- WHOIS bruto -->
+  <div class="tab-body" x-show="tab==='bruto'" x-cloak>
+    {% if last_ok and last_ok.whois_raw %}<pre class="raw">{{ last_ok.whois_raw }}</pre>{% else %}<p class="muted">Sem resposta bruta armazenada.</p>{% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not d.last_checked_at %}
+<script>setTimeout(() => location.reload(), 5000);</script>
+{% endif %}
+<script>
+  document.addEventListener("alpine:initialized", () => {
+    if (location.hash === "#historico") { window._h = 1; WN.historyChart({{ d.id }}); }
+  });
+</script>
+{% endblock %}
