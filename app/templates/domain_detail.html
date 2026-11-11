@@ -150,9 +150,16 @@
       <dt>DNSSEC (WHOIS)</dt><dd>{{ w.dnssec or "—" }}</dd>
       <dt>Titular</dt><dd>{{ w.registrant or "—" }}</dd>
       <dt>Documento</dt><dd>{{ w.registrant_id or "—" }}</dd>
+      {% if w.responsible %}<dt>Responsável</dt><dd>{{ w.responsible }}</dd>{% endif %}
       <dt>País</dt><dd>{{ w.country or "—" }}</dd>
-      <dt>Contatos</dt><dd>{% for e in w.emails %}<span class="chip">{{ e }}</span>{% else %}—{% endfor %}</dd>
+      <dt>E-mails</dt><dd>{% for e in w.emails %}<span class="chip">{{ e }}</span>{% else %}—{% endfor %}</dd>
     </dl>
+    {% for c in w.contacts or [] %}
+    <h3 class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:22px 0 6px">Contato · {{ c.role }}{% if c.handle %} <span class="mono">({{ c.handle }})</span>{% endif %}</h3>
+    <dl class="kv">
+      {% for label, value in c.fields %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}
+    </dl>
+    {% endfor %}
     <p class="muted" style="font-size:12px;margin:14px 0 0">Consulta bem-sucedida em {{ last_ok.created_at|datetime }}.</p>
     {% else %}<p class="muted">Nenhuma consulta WHOIS bem-sucedida até agora.</p>{% endif %}
   </div>
