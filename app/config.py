@@ -14,7 +14,7 @@ except OSError:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 APP_NAME = "Whois Notification"
-APP_VERSION = "3.0.3"
+APP_VERSION = "3.0.4"
 
 DB_HOST = os.getenv("DB_HOST", "db")
 DB_PORT = os.getenv("DB_PORT", "3306")

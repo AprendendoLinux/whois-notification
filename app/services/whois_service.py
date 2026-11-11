@@ -58,8 +58,25 @@ def _clean_ns(v) -> list[str]:
     return sorted(out)
 
 
+def _connect(server: str, timeout: float) -> socket.socket:
+    """Tenta IPv6 primeiro (o registro.br omite contatos para alguns IPv4) e cai para IPv4."""
+    infos = socket.getaddrinfo(server, 43, type=socket.SOCK_STREAM)
+    infos.sort(key=lambda i: i[0] != socket.AF_INET6)
+    last: OSError | None = None
+    for family, stype, proto, _, addr in infos:
+        s = socket.socket(family, stype, proto)
+        s.settimeout(timeout)
+        try:
+            s.connect(addr)
+            return s
+        except OSError as e:
+            last = e
+            s.close()
+    raise last or OSError(f"sem endereço para {server}")
+
+
 def _raw_query(server: str, query: str, timeout: float = 10.0) -> str:
-    with socket.create_connection((server, 43), timeout=timeout) as s:
+    with _connect(server, timeout) as s:
         s.sendall((query + "\r\n").encode())
         chunks = []
         while True:
