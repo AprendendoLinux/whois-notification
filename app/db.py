@@ -17,7 +17,7 @@ class Base(DeclarativeBase):
     pass
 
 
-def init_db(retries: int = 60, delay: float = 2.0) -> None:
+def init_db(retries: int = 90, delay: float = 2.0) -> None:
     """Aguarda o MySQL ficar disponível e cria todas as tabelas que ainda não existirem."""
     from . import models  # noqa: F401 — registra as tabelas
 
