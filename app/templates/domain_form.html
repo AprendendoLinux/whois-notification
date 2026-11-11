@@ -50,6 +50,26 @@
   </section>
 
   <section class="panel">
+    <div class="panel-head"><h2>Remetentes de envio</h2><a class="hint" href="/senders">gerenciar remetentes →</a></div>
+    <div class="row">
+      <div class="field">
+        <label for="ss">Remetente SMTP</label>
+        <select id="ss" name="smtp_sender_id">
+          <option value="">Padrão da minha conta</option>
+          {% for sd in smtp_senders %}<option value="{{ sd.id }}" {{ "selected" if (form.get('smtp_sender_id')|string if (form is defined and form) else (domain.smtp_sender_id|string if editing else '')) == sd.id|string }}>{{ sd.name }} ({{ sd.from_email }})</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="sb">Bot do Telegram</label>
+        <select id="sb" name="telegram_bot_id">
+          <option value="">Padrão da minha conta</option>
+          {% for b in bots %}<option value="{{ b.id }}" {{ "selected" if (form.get('telegram_bot_id')|string if (form is defined and form) else (domain.telegram_bot_id|string if editing else '')) == b.id|string }}>{{ b.name }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
     <div class="panel-head"><h2>Destinatários dos alertas</h2><a class="hint" href="/contacts">gerenciar contatos →</a></div>
     <div class="form">
       {% if contacts %}

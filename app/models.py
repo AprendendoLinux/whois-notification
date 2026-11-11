@@ -2,11 +2,13 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text,
+    JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, UniqueConstraint,
 )
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
+from .crypto import decrypt, encrypt
 from .db import Base
 
 
@@ -15,7 +17,7 @@ def utcnow() -> datetime:
 
 
 class AwareDateTime(TypeDecorator):
-    """SQLite não guarda fuso: gravamos em UTC e devolvemos sempre aware."""
+    """MySQL DATETIME não guarda fuso: gravamos em UTC e devolvemos sempre aware."""
     impl = DateTime
     cache_ok = True
 
@@ -44,19 +46,93 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(AwareDateTime, default=utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(AwareDateTime, nullable=True)
+
+    @property
+    def needs_email(self) -> bool:
+        return self.email.endswith(PLACEHOLDER_EMAIL_DOMAIN)
+
+
+PLACEHOLDER_EMAIL_DOMAIN = "@whois.local"
+
+
+class PasswordReset(Base):
+    __tablename__ = "password_resets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(AwareDateTime)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(AwareDateTime, default=utcnow)
 
 
-class Setting(Base):
-    __tablename__ = "settings"
+class SystemSetting(Base):
+    """Configurações globais (somente administrador)."""
+    __tablename__ = "system_settings"
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class UserSetting(Base):
+    __tablename__ = "user_settings"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SmtpSender(Base):
+    __tablename__ = "smtp_senders"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    server: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer, default=587)
+    security: Mapped[str] = mapped_column(String(16), default="starttls")  # starttls | ssl | none
+    username: Mapped[str] = mapped_column(String(255), default="")
+    password_enc: Mapped[str] = mapped_column(Text, default="")
+    from_email: Mapped[str] = mapped_column(String(255))
+    from_name: Mapped[str] = mapped_column(String(120), default="Whois Notification")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(AwareDateTime, default=utcnow)
+
+    @property
+    def password(self) -> str:
+        return decrypt(self.password_enc)
+
+    @password.setter
+    def password(self, value: str) -> None:
+        self.password_enc = encrypt(value)
+
+
+class TelegramBot(Base):
+    __tablename__ = "telegram_bots"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    token_enc: Mapped[str] = mapped_column(Text, default="")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(AwareDateTime, default=utcnow)
+
+    @property
+    def token(self) -> str:
+        return decrypt(self.token_enc)
+
+    @token.setter
+    def token(self, value: str) -> None:
+        self.token_enc = encrypt(value)
+
+
 class Contact(Base):
     __tablename__ = "contacts"
+    __table_args__ = (UniqueConstraint("user_id", "kind", "value", name="uq_contact_user_kind_value"),)
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(120), default="")
     kind: Mapped[str] = mapped_column(String(16))  # email | telegram
     value: Mapped[str] = mapped_column(String(255))
@@ -73,8 +149,14 @@ class Contact(Base):
 
 class Domain(Base):
     __tablename__ = "domains"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_domain_user_name"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    smtp_sender_id: Mapped[int | None] = mapped_column(
+        ForeignKey("smtp_senders.id", ondelete="SET NULL"), nullable=True)
+    telegram_bot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("telegram_bots.id", ondelete="SET NULL"), nullable=True)
     days_threshold: Mapped[int] = mapped_column(Integer, default=30)
     ssl_threshold: Mapped[int] = mapped_column(Integer, default=14)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -174,7 +256,7 @@ class Check(Base):
     success: Mapped[bool] = mapped_column(Boolean, default=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     whois: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    whois_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whois_raw: Mapped[str | None] = mapped_column(Text().with_variant(LONGTEXT, "mysql"), nullable=True)
     dns: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ssl: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     http: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -198,6 +280,7 @@ class Change(Base):
 class Notification(Base):
     __tablename__ = "notifications"
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     domain_id: Mapped[int | None] = mapped_column(
         ForeignKey("domains.id", ondelete="CASCADE"), index=True, nullable=True
     )

@@ -369,3 +369,14 @@ pre.raw { margin: 0; max-height: 560px; overflow: auto; padding: 16px; border-ra
   .countdown .n { font-size: 20px; }
   .clock b { font-size: 12px; }
 }
+
+/* ---------------------------------------------------- Multiusuário (v3) --- */
+.nav-sep { margin: 14px 0 4px; padding: 0 12px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; color: var(--text-faint); }
+.auth-links { display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px; }
+.pw-box { font-family: var(--font-mono); color: var(--cyan); }
+.badge.off { color: var(--text-faint); border-color: var(--line); }
+.stack { display: flex; flex-direction: column; gap: 18px; }
+details.edit { margin-top: 6px; }
+details.edit > summary { cursor: pointer; color: var(--cyan); font-size: 12px; list-style: none; }
+details.edit > summary::-webkit-details-marker { display: none; }
+details.edit[open] > summary { margin-bottom: 10px; }

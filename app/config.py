@@ -1,38 +1,55 @@
-"""Configuração de caminhos e fuso horário."""
+"""Configuração de infraestrutura: banco de dados (única parte via ambiente), chaves e fuso."""
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-DB_PATH = DATA_DIR / "whois.db"
-DATABASE_URL = f"sqlite:///{DB_PATH}"
-LEGACY_JSON = DATA_DIR / "domains.json"
+DATA_DIR = Path("/app/data")
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    DATA_DIR = BASE_DIR.parent / "data"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 APP_NAME = "Whois Notification"
-APP_VERSION = "2.0.0"
+APP_VERSION = "3.0.0"
+
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_PORT = os.getenv("DB_PORT", "3306")
+DB_NAME = os.getenv("DB_NAME", "whois")
+DB_USER = os.getenv("DB_USER", "whois")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+
+DATABASE_URL = (
+    f"mysql+pymysql://{quote_plus(DB_USER)}:{quote_plus(DB_PASSWORD)}"
+    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
+)
+
+DEFAULT_TZ = "America/Sao_Paulo"
+_tz = ZoneInfo(DEFAULT_TZ)
 
 
-def _load_tz() -> ZoneInfo:
-    name = os.getenv("TZ", "America/Sao_Paulo")
+def valid_tz(name: str) -> bool:
     try:
-        return ZoneInfo(name)
+        ZoneInfo(name)
+        return True
     except (ZoneInfoNotFoundError, ValueError):
-        return ZoneInfo("UTC")
+        return False
 
 
-LOCAL_TZ = _load_tz()
+def set_tz(name: str) -> None:
+    global _tz
+    _tz = ZoneInfo(name) if valid_tz(name) else ZoneInfo("UTC")
 
 
-def _secret_key() -> str:
-    """Chave de sessão: variável de ambiente ou arquivo persistido no volume."""
-    env = os.getenv("SECRET_KEY")
-    if env:
-        return env
-    key_file = DATA_DIR / ".secret_key"
+def local_tz() -> ZoneInfo:
+    return _tz
+
+
+def _persisted_key(filename: str) -> str:
+    key_file = DATA_DIR / filename
     if key_file.exists():
         return key_file.read_text().strip()
     key = secrets.token_urlsafe(48)
@@ -44,4 +61,4 @@ def _secret_key() -> str:
     return key
 
 
-SECRET_KEY = _secret_key()
+SECRET_KEY = _persisted_key(".secret_key")

@@ -1,95 +1,94 @@
-"""Configurações editáveis pela interface, com prioridade para variáveis de ambiente."""
-import os
-from dataclasses import dataclass
-
+"""Configurações: por usuário (agendamento/política) e do sistema (somente administrador)."""
 from sqlalchemy.orm import Session
 
-from ..models import Setting
+from .. import config
+from ..crypto import decrypt, encrypt
+from ..models import SystemSetting, UserSetting
+
+USER_DEFAULTS = {
+    "check_time": "09:00",
+    "milestones": "60,45,30,15,7",
+    "daily_below": "7",
+    "alert_on_changes": "1",
+    "history_days": "365",
+}
+
+SYSTEM_DEFAULTS = {
+    "timezone": config.DEFAULT_TZ,
+    "public_url": "",
+    "sys_smtp_server": "",
+    "sys_smtp_port": "587",
+    "sys_smtp_security": "starttls",
+    "sys_smtp_user": "",
+    "sys_smtp_password": "",
+    "sys_smtp_from": "",
+    "sys_smtp_from_name": "Whois Notification",
+}
+SYSTEM_SECRETS = {"sys_smtp_password"}
 
 
-@dataclass(frozen=True)
-class SettingDef:
-    key: str
-    label: str
-    default: str = ""
-    env: str | None = None
-    secret: bool = False
-    group: str = "geral"
-
-
-DEFS: list[SettingDef] = [
-    SettingDef("smtp_server", "Servidor SMTP", env="SMTP_SERVER", group="smtp"),
-    SettingDef("smtp_port", "Porta", "587", env="SMTP_PORT", group="smtp"),
-    SettingDef("smtp_security", "Segurança", "starttls", env="SMTP_SECURITY", group="smtp"),
-    SettingDef("smtp_user", "Usuário", env="SMTP_USER", group="smtp"),
-    SettingDef("smtp_password", "Senha", env="SMTP_PASSWORD", secret=True, group="smtp"),
-    SettingDef("smtp_from", "Remetente (e-mail)", env="SMTP_FROM", group="smtp"),
-    SettingDef("smtp_from_name", "Remetente (nome)", "Whois Notification", env="SMTP_FROM_NAME", group="smtp"),
-    SettingDef("telegram_token", "Token do bot", env="TELEGRAM_BOT_TOKEN", secret=True, group="telegram"),
-    SettingDef("check_time", "Horário da verificação diária", "09:00", env="CHECK_TIME", group="schedule"),
-    SettingDef("milestones", "Marcos de aviso (dias)", "60,45,30,15,7", group="schedule"),
-    SettingDef("daily_below", "Aviso diário abaixo de (dias)", "7", group="schedule"),
-    SettingDef("alert_on_changes", "Alertar mudanças críticas", "1", group="schedule"),
-    SettingDef("history_days", "Manter histórico por (dias)", "365", group="schedule"),
-]
-DEF_BY_KEY = {d.key: d for d in DEFS}
-
-
-def env_value(key: str) -> str | None:
-    d = DEF_BY_KEY[key]
-    if d.env:
-        v = os.getenv(d.env)
-        if v not in (None, ""):
-            return v
-    return None
-
-
-def get(db: Session, key: str) -> str:
-    v = env_value(key)
-    if v is not None:
-        return v
-    row = db.get(Setting, key)
+# ----------------------------------------------------------------- Usuário --
+def get(db: Session, user_id: int, key: str) -> str:
+    row = db.get(UserSetting, (user_id, key))
     if row is not None and row.value is not None:
         return row.value
-    return DEF_BY_KEY[key].default
+    return USER_DEFAULTS[key]
 
 
-def get_int(db: Session, key: str) -> int:
+def get_int(db: Session, user_id: int, key: str) -> int:
     try:
-        return int(get(db, key))
+        return int(get(db, user_id, key))
     except (TypeError, ValueError):
-        return int(DEF_BY_KEY[key].default or 0)
+        return int(USER_DEFAULTS[key])
 
 
-def get_int_list(db: Session, key: str) -> list[int]:
+def get_int_list(db: Session, user_id: int, key: str) -> list[int]:
     out = []
-    for part in get(db, key).replace(";", ",").split(","):
+    for part in get(db, user_id, key).replace(";", ",").split(","):
         part = part.strip()
         if part.lstrip("-").isdigit():
             out.append(int(part))
     return sorted(set(out), reverse=True)
 
 
-def set_value(db: Session, key: str, value: str) -> None:
-    if key not in DEF_BY_KEY:
+def set_value(db: Session, user_id: int, key: str, value: str) -> None:
+    if key not in USER_DEFAULTS:
         raise KeyError(key)
-    row = db.get(Setting, key)
+    row = db.get(UserSetting, (user_id, key))
     if row is None:
-        db.add(Setting(key=key, value=value))
+        db.add(UserSetting(user_id=user_id, key=key, value=value))
     else:
         row.value = value
 
 
-def snapshot(db: Session) -> dict[str, dict]:
-    """Valores para a página de configurações (segredos mascarados)."""
-    out = {}
-    for d in DEFS:
-        locked = env_value(d.key) is not None
-        val = get(db, d.key)
-        out[d.key] = {
-            "def": d,
-            "value": "" if d.secret else val,
-            "is_set": bool(val),
-            "locked": locked,
-        }
-    return out
+def user_snapshot(db: Session, user_id: int) -> dict[str, str]:
+    return {k: get(db, user_id, k) for k in USER_DEFAULTS}
+
+
+# ----------------------------------------------------------------- Sistema --
+def sys_get(db: Session, key: str) -> str:
+    row = db.get(SystemSetting, key)
+    value = row.value if row is not None and row.value is not None else SYSTEM_DEFAULTS[key]
+    return decrypt(value) if key in SYSTEM_SECRETS else value
+
+
+def sys_set(db: Session, key: str, value: str) -> None:
+    if key not in SYSTEM_DEFAULTS:
+        raise KeyError(key)
+    if key in SYSTEM_SECRETS:
+        value = encrypt(value)
+    row = db.get(SystemSetting, key)
+    if row is None:
+        db.add(SystemSetting(key=key, value=value))
+    else:
+        row.value = value
+
+
+def sys_snapshot(db: Session) -> dict[str, str]:
+    snap = {k: sys_get(db, k) for k in SYSTEM_DEFAULTS}
+    snap["sys_smtp_password"] = ""  # nunca devolvido à tela
+    return snap
+
+
+def load_timezone(db: Session) -> None:
+    config.set_tz(sys_get(db, "timezone"))

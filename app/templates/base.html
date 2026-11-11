@@ -20,11 +20,17 @@
       <a href="/" class="{{ 'active' if nav == 'dashboard' }}">{{ icon("grid") }} Painel</a>
       <a href="/domains/new" class="{{ 'active' if nav == 'domains' }}">{{ icon("plus") }} Novo domínio</a>
       <a href="/contacts" class="{{ 'active' if nav == 'contacts' }}">{{ icon("users") }} Contatos</a>
+      <a href="/senders" class="{{ 'active' if nav == 'senders' }}">{{ icon("send") }} Remetentes</a>
       <a href="/notifications" class="{{ 'active' if nav == 'notifications' }}">{{ icon("bell") }} Eventos</a>
       <a href="/settings" class="{{ 'active' if nav == 'settings' }}">{{ icon("cog") }} Configurações</a>
+      {% if user.is_admin %}
+      <span class="nav-sep">// ADMINISTRAÇÃO</span>
+      <a href="/admin/users" class="{{ 'active' if nav == 'admin_users' }}">{{ icon("shield") }} Usuários</a>
+      <a href="/admin/system" class="{{ 'active' if nav == 'admin_system' }}">{{ icon("server") }} Sistema</a>
+      {% endif %}
     </nav>
     <div class="sidebar-foot">
-      <span>Operador: <b class="dim">{{ user.username }}</b></span>
+      <span>Operador: <b class="dim">{{ user.username }}</b>{% if user.is_admin %} <span class="badge magenta">admin</span>{% endif %}</span>
       <form method="post" action="/logout">
         <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
         <button class="btn ghost sm" type="submit">Sair</button>

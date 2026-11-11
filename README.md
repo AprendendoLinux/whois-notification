@@ -14,12 +14,12 @@ Repositório Oficial: [https://github.com/AprendendoLinux/whois-notification](ht
 ## 📖 Índice
 
 1. [Introdução e Motivação](#-introdução-e-motivação)
-2. [Novidades da versão 2](#-novidades-da-versão-2)
+2. [Novidades da versão 3](#-novidades-da-versão-3)
 3. [Arquitetura do Sistema](#-arquitetura-do-sistema)
 4. [Funcionalidades](#-funcionalidades)
 5. [Pré-requisitos](#-pré-requisitos)
 6. [Guia de Implantação (Quick Start)](#-guia-de-implantação-quick-start)
-7. [Atualizando da versão 1 (domains.json)](#-atualizando-da-versão-1-domainsjson)
+7. [Multiusuário e administração](#-multiusuário-e-administração)
 8. [Referência do docker-compose.yml](#-referência-do-docker-composeyml)
 9. [Variáveis de Ambiente](#-variáveis-de-ambiente)
 10. [Política de Alertas](#-política-de-alertas)
@@ -39,16 +39,15 @@ O **Whois Notification** foi projetado para mitigar esse risco de forma definiti
 
 ---
 
-## 🆕 Novidades da versão 2
+## 🆕 Novidades da versão 3
 
-* **Interface web** com painel visual: indicadores, radar de expirações para os próximos 12 meses e cartões por domínio.
-* **Panorama completo do domínio**: WHOIS, registros DNS, segurança de e-mail (SPF, DMARC, DKIM), certificado SSL/TLS, disponibilidade HTTP, histórico e resposta WHOIS bruta.
-* **Banco SQLite** no lugar do `domains.json`, com **migração automática** na primeira execução.
-* **Alertas de certificado SSL** vencendo ou expirado.
-* **Detecção de mudanças** em nameservers, registrador, status, MX e DNSSEC, com alerta de possível sequestro de domínio.
-* **Política de alertas inteligente**: avisos em marcos (60, 45, 30, 15 e 7 dias) e diários na reta final, em vez de repetir a mesma mensagem todos os dias.
-* **Configuração pela interface**: SMTP, Telegram, horário e política. As variáveis de ambiente continuam funcionando e têm prioridade.
-* **Correções**: datas com fuso horário que impediam a verificação, suporte real à porta 465 (SSL), timeouts e registro de erros no Telegram.
+* **Banco MySQL** (`mysql:latest`) no lugar do SQLite. Na primeira execução, com o banco vazio, todas as tabelas são criadas automaticamente.
+* **Multiusuário:** cada usuário tem seus próprios domínios, contatos, remetentes SMTP, bots do Telegram, agendamento e histórico. Um usuário nunca vê os dados do outro.
+* **Área do administrador:** criar e excluir usuários, tornar ou revogar administrador, desativar/reativar, gerar senha temporária e configurar o sistema.
+* **Tudo pela interface:** a única configuração por ambiente é a conexão com o banco. SMTP, Telegram, fuso horário e agendamento são feitos dentro do sistema.
+* **Primeiro acesso seguro:** o usuário `admin` nasce com senha aleatória exibida nos logs do contêiner e a troca é obrigatória no primeiro login.
+* **Recuperação de senha por e-mail** ("esqueci minha senha"). O e-mail é obrigatório no cadastro.
+* **E-mails com a identidade do sistema:** visual escuro/neon e o logotipo do próprio Whois Notification.
 
 ---
 
@@ -62,18 +61,17 @@ O **Whois Notification** foi projetado para mitigar esse risco de forma definiti
                          |  APScheduler ── varredura diária     | ----> DNS (A, AAAA, NS, MX, TXT, CAA, DS)
                          |  Coletores ── WHOIS/DNS/SSL/HTTP     | ----> Porta 443 (certificado TLS)
                          |  Notificador ── e-mail / Telegram    | ----> HTTP(S) do site
-                         +------------------+-------------------+
-                                            |                    ----> API do Telegram / Servidor SMTP
-                                 /app/data (volume)
-                                 ├── whois.db  (SQLite)
-                                 ├── logo.*    (logotipo dos e-mails)
-                                 └── .secret_key
+                         +---------+-----------+----------+
+                                   |                      |            ----> API do Telegram / Servidor SMTP
+                         MySQL (container `db`)     /app/data (volume)
+                         usuários, domínios,        ├── .secret_key (sessões)
+                         histórico, remetentes      └── .enc_key    (criptografia dos segredos)
 ```
 
 | Componente | Tecnologia |
 |---|---|
 | Backend e API | FastAPI + Uvicorn |
-| Banco de dados | SQLite (SQLAlchemy 2 + migrações Alembic automáticas) |
+| Banco de dados | MySQL (SQLAlchemy 2 + PyMySQL; tabelas criadas automaticamente) |
 | Agendador | APScheduler (no mesmo processo) |
 | Interface | Jinja2, HTMX, Alpine.js e ECharts, servidos localmente (funciona sem internet) |
 
@@ -90,9 +88,9 @@ O **Whois Notification** foi projetado para mitigar esse risco de forma definiti
   * **HTTP:** status, tempo de resposta, redirecionamentos e cabeçalhos de segurança.
   * **Histórico:** gráfico de tempo de resposta, linha do tempo de mudanças e lista de varreduras.
 * **Granularidade de Alertas:** cada domínio tem sua janela de alerta de expiração e de SSL.
+* **Remetentes por usuário:** vários servidores SMTP e bots do Telegram, com um padrão e a opção de escolher outro em cada domínio.
 * **Contatos reutilizáveis:** um e-mail ou chat do Telegram pode receber alertas de vários domínios. Cada contato tem um botão "Testar".
 * **Escalonamento de Severidade:** os alertas mudam de tom e de cor quando o domínio está perto de expirar ou já expirou.
-* **Logotipo nos e-mails:** coloque um arquivo `logo.*` (PNG, JPG, SVG...) no volume e ele aparece no cabeçalho dos e-mails.
 * **Registro de eventos:** todos os envios, com sucesso ou falha, ficam registrados e aparecem na interface.
 
 ---
@@ -107,18 +105,15 @@ O **Whois Notification** foi projetado para mitigar esse risco de forma definiti
 
 ## 🚀 Guia de Implantação (Quick Start)
 
-### Passo 1: Preparar o diretório de dados
+### Passo 1: Preparar os diretórios
 
 ```bash
-sudo mkdir -p /srv/whois
-cd /srv/whois
+sudo mkdir -p /srv/whois/app /srv/whois/mysql
 ```
-
-Coloque nessa pasta o seu logotipo (ex.: `logo.png`), se quiser usá-lo nos e-mails.
 
 ### Passo 2: Criar o `docker-compose.yml`
 
-Veja a [referência abaixo](#-referência-do-docker-composeyml).
+Veja a [referência abaixo](#-referência-do-docker-composeyml). Troque as senhas do banco.
 
 ### Passo 3: Subir o serviço
 
@@ -126,13 +121,20 @@ Veja a [referência abaixo](#-referência-do-docker-composeyml).
 docker compose up -d
 ```
 
-### Passo 4: Acessar o painel
+### Passo 4: Primeiro acesso
 
-Abra `http://SEU_SERVIDOR:8000`. Na primeira vez, o sistema pede para criar a conta de administrador. Se você definir `ADMIN_USER` e `ADMIN_PASSWORD`, ela é criada automaticamente.
+Pegue a senha gerada para o `admin` nos logs:
 
-Depois disso:
-1. Em **Configurações**, preencha o SMTP e/ou o token do Telegram e use **Enviar teste**.
-2. Em **Novo domínio**, cadastre seus domínios e os destinatários dos alertas.
+```bash
+docker compose logs whois_notification | grep -A4 "PRIMEIRO ACESSO"
+```
+
+Abra `http://SEU_SERVIDOR:8000`, entre como `admin` e, na tela seguinte, informe seu **e-mail** e defina uma **nova senha**. O sistema não deixa seguir antes disso.
+
+Depois:
+1. Em **Sistema** (menu do administrador), configure o SMTP usado na recuperação de senha, o fuso horário e a URL pública.
+2. Em **Usuários**, crie as contas das demais pessoas.
+3. Cada usuário cadastra seus **Remetentes** (SMTP e bots do Telegram), seus **Contatos** e seus **domínios**.
 
 ### Passo 5: Acompanhar os logs
 
@@ -142,16 +144,22 @@ docker compose logs -f
 
 ---
 
-## 🔄 Atualizando da versão 1 (domains.json)
+## 👥 Multiusuário e administração
 
-Não é preciso fazer nada manualmente. Ao iniciar a versão 2 com o mesmo volume:
+| Ação | Quem faz |
+|---|---|
+| Cadastrar domínios, contatos, remetentes SMTP/Telegram, agendamento | Cada usuário, só para si |
+| Criar/excluir usuários, tornar/revogar administrador, desativar/reativar, gerar senha temporária | Administrador (menu **Usuários**) |
+| Fuso horário, URL pública e SMTP do sistema | Administrador (menu **Sistema**) |
 
-1. Se existir `/app/data/domains.json` e o banco estiver vazio, todos os domínios, e-mails, chats e limites são importados para o SQLite.
-2. O arquivo é renomeado para `domains.json.migrated`, como backup. Ele não é apagado.
-3. Os domínios de exemplo (`exemplo.com.br`, `outroexemplo.net`) e entradas inválidas são ignorados.
-4. Uma varredura começa logo em seguida.
-
-As variáveis de SMTP e Telegram da versão 1 continuam valendo. Só é preciso **publicar a porta 8000** no compose para acessar a interface.
+* Usuários novos recebem uma **senha temporária** (definida pelo administrador ou gerada) e são obrigados a trocá-la no primeiro login.
+* O sistema sempre mantém pelo menos **um administrador ativo**, e ninguém pode excluir, desativar ou rebaixar a si mesmo.
+* Excluir um usuário apaga também todos os seus dados.
+* **Esqueci minha senha:** o link é enviado ao e-mail da conta e vale por 1 hora, uso único. Usa o SMTP do sistema; se ele não estiver configurado, usa o remetente SMTP do próprio usuário.
+* **Perdeu a senha do admin e não há e-mail configurado?** Gere uma nova senha temporária:
+  ```bash
+  docker exec whois_notification python -m app.cli reset-admin
+  ```
 
 ---
 
@@ -165,36 +173,37 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Banco SQLite (whois.db), logo.* dos e-mails, .secret_key
-      # e, se existir, o domains.json antigo (é migrado automaticamente)
-      - /srv/whois:/app/data
+      # Chaves geradas no primeiro boot (sessão e criptografia dos segredos).
+      # Faça backup junto com o banco: sem elas, as senhas SMTP/tokens salvos não podem ser lidas.
+      - /srv/whois/app:/app/data
     environment:
-      - TZ=America/Sao_Paulo
-
-      # Administrador criado na primeira execução (sem isso, a tela /setup pede para criar)
-      - ADMIN_USER=admin
-      - ADMIN_PASSWORD=troque_esta_senha
-
-      # Use 1 quando estiver atrás de um proxy com HTTPS
-      # - COOKIE_SECURE=1
-
-      # Opcional: podem ser configurados pela interface.
-      # Se definidos aqui, têm prioridade e ficam bloqueados na tela de Configurações.
-      # - TELEGRAM_BOT_TOKEN=123456789:ABCDEF...
-      # - SMTP_SERVER=smtp.exemplo.com.br
-      # - SMTP_PORT=587
-      # - SMTP_SECURITY=starttls      # starttls | ssl | none
-      # - SMTP_USER=alertas@exemplo.com.br
-      # - SMTP_PASSWORD=sua_senha
-      # - SMTP_FROM=alertas@exemplo.com.br
-      # - SMTP_FROM_NAME=Whois Notification
-      # - CHECK_TIME=09:00
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=whois
+      - DB_USER=whois
+      - DB_PASSWORD=troque_esta_senha
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+
+  db:
+    image: mysql:latest
+    container_name: whois_db
+    environment:
+      - MYSQL_DATABASE=whois
+      - MYSQL_USER=whois
+      - MYSQL_PASSWORD=troque_esta_senha
+      - MYSQL_ROOT_PASSWORD=troque_a_senha_root
+    volumes:
+      - /srv/whois/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
 ```
 
 > **Importante:** o agendador roda dentro do processo da aplicação. Mantenha **um único container** (e um único worker) por banco de dados.
@@ -203,22 +212,17 @@ services:
 
 ## 🔧 Variáveis de Ambiente
 
-Todas são opcionais. As que configuram SMTP, Telegram e horário também podem ser editadas pela interface. Quando definidas no ambiente, **têm prioridade** e aparecem bloqueadas (🔒) na tela de Configurações.
+Somente a conexão com o banco é configurada por ambiente. **Todo o resto é feito dentro do sistema.**
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `TZ` | `America/Sao_Paulo` | Fuso do agendamento e da interface |
-| `PORT` | `8000` | Porta HTTP dentro do container |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | — | Cria o administrador na primeira execução |
-| `SECRET_KEY` | gerada em `/app/data/.secret_key` | Chave de assinatura das sessões |
-| `COOKIE_SECURE` | `0` | Use `1` atrás de HTTPS |
-| `CHECK_TIME` | `09:00` | Horário da varredura diária |
-| `TELEGRAM_BOT_TOKEN` | — | Token do bot do Telegram |
-| `SMTP_SERVER` | — | Servidor SMTP |
-| `SMTP_PORT` | `587` | Porta SMTP |
-| `SMTP_SECURITY` | `starttls` | `starttls`, `ssl` (porta 465) ou `none` |
-| `SMTP_USER` / `SMTP_PASSWORD` | — | Credenciais SMTP |
-| `SMTP_FROM` / `SMTP_FROM_NAME` | — / `Whois Notification` | Remetente |
+| `DB_HOST` | `db` | Host do MySQL |
+| `DB_PORT` | `3306` | Porta do MySQL |
+| `DB_NAME` | `whois` | Nome do banco |
+| `DB_USER` | `whois` | Usuário do banco |
+| `DB_PASSWORD` | — | Senha do banco |
+
+Fuso horário, URL pública e SMTP do sistema: **Sistema** (administrador). Horário da varredura e política de alertas: **Configurações** (cada usuário).
 
 ---
 
@@ -232,7 +236,7 @@ A cada varredura, para a expiração do domínio e para a do certificado SSL:
 4. **Reta final** (padrão: 7 dias ou menos) e **depois de expirado:** um alerta por dia, sem parar, para garantir a recuperação durante o *Redemption Grace Period*.
 5. **Nunca** mais de um alerta do mesmo tipo por dia. Quando o domínio é renovado, o ciclo recomeça.
 
-Os marcos e o limite diário são ajustáveis em **Configurações**. Canais sem configuração (por exemplo, SMTP vazio) são ignorados, e o painel mostra um aviso.
+Os marcos e o limite diário são ajustáveis por usuário em **Configurações**. Canais sem remetente cadastrado são ignorados, e o painel mostra um aviso.
 
 ### Perfis de alerta
 
@@ -252,35 +256,40 @@ Alguns servidores WHOIS respondem com dados diferentes conforme o servidor consu
 
 ## 🔒 Segurança
 
-* A interface exige login. As senhas são armazenadas com hash **scrypt**.
-* Todos os formulários têm proteção **CSRF**, e o cookie de sessão é `HttpOnly` e `SameSite=Lax`.
-* Senhas de SMTP e tokens nunca são exibidos na interface. Eles ficam no banco `whois.db`, então **proteja o volume** (`chmod 700 /srv/whois`) ou use variáveis de ambiente.
-* Para acesso pela internet, coloque um proxy reverso com HTTPS na frente (Nginx, Traefik, Caddy) e use `COOKIE_SECURE=1`.
+* A interface exige login. As senhas são armazenadas com hash **scrypt**, e há limite de tentativas de login e de recuperação.
+* Todos os formulários têm proteção **CSRF**, e o cookie de sessão é `HttpOnly`, `SameSite=Lax` e `Secure` automaticamente quando acessado por HTTPS.
+* Cada consulta é filtrada pelo usuário logado: um usuário não acessa domínios, contatos ou remetentes de outro, nem pela API.
+* Senhas SMTP e tokens do Telegram são **criptografados** (Fernet) no banco e nunca exibidos na interface. A chave fica em `/app/data/.enc_key`.
+* Redefinição de senha: token aleatório de uso único, guardado só como hash, válido por 1 hora.
+* Para acesso pela internet, coloque um proxy reverso com HTTPS na frente (Nginx, Traefik, Caddy) e informe a URL pública em **Sistema**.
 
 ---
 
 ## 💻 Desenvolvimento Local
 
 ```bash
+docker run -d --name whois-mysql -p 3306:3306 -e MYSQL_DATABASE=whois -e MYSQL_USER=whois \
+  -e MYSQL_PASSWORD=dev -e MYSQL_ROOT_PASSWORD=dev mysql:latest
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-DATA_DIR=./data .venv/bin/uvicorn app.main:app --reload --port 8000
+DB_HOST=127.0.0.1 DB_PASSWORD=dev .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
+* A senha inicial do `admin` aparece no terminal.
 * Documentação da API: `http://localhost:8000/api/docs` (exige login).
-* Nova migração depois de alterar `app/models.py`:
-  ```bash
-  DATA_DIR=./data .venv/bin/python -m app.dbmigrate revision "descrição da mudança"
-  ```
+* Não há migrações: as tabelas são criadas automaticamente quando não existem.
 
 Estrutura:
 
 ```text
 app/
 ├── main.py              # FastAPI, ciclo de vida, middlewares
-├── models.py            # Tabelas SQLite
-├── scheduler.py         # Agendamento diário e varreduras sob demanda
-├── migrate_json.py      # Importação do domains.json (v1)
+├── models.py            # Tabelas MySQL
+├── db.py                # Engine e criação das tabelas
+├── auth.py              # Senhas, sessão, recuperação, admin inicial
+├── crypto.py            # Criptografia dos segredos
+├── scheduler.py         # Varredura diária por usuário
+├── cli.py               # reset-admin
 ├── services/
 │   ├── whois_service.py # Consulta WHOIS normalizada
 │   ├── dns_service.py   # DNS, SPF, DMARC, DKIM, DNSSEC
@@ -288,10 +297,10 @@ app/
 │   ├── http_service.py  # Disponibilidade HTTP
 │   ├── checker.py       # Orquestração, mudanças e política de alertas
 │   ├── notifier.py      # E-mail e Telegram
-│   └── settings.py      # Configurações (banco + ambiente)
-├── routes/              # Páginas e API JSON
-├── templates/           # Interface e template do e-mail
-└── migrations/          # Alembic
+│   ├── senders.py       # Resolução dos remetentes por usuário/domínio
+│   └── settings.py      # Configurações do usuário e do sistema
+├── routes/              # Páginas, administração e API JSON
+└── templates/           # Interface e template do e-mail
 ```
 
 ---
@@ -305,13 +314,13 @@ Alguns TLDs (ex.: `.ai`, `.io`) limitam consultas. Veja o erro na aba *Históric
 Alguns registros não publicam a data, como domínios diretamente sob `.br` (ex.: `registro.br`). O restante do panorama continua disponível.
 
 **3. O e-mail não chega.**
-Use **Configurações → Enviar teste**. O erro exato aparece na tela e em **Eventos**. Confira porta e segurança (587 + STARTTLS ou 465 + SSL) e se o provedor exige senha de app. Verifique a caixa de SPAM.
+Use o botão **Testar** em **Remetentes** ou **Contatos**. O erro exato aparece na tela e em **Eventos**. Confira porta e segurança (587 + STARTTLS ou 465 + SSL) e se o provedor exige senha de app. Verifique a caixa de SPAM.
 
 **4. Telegram responde "chat not found".**
 O destinatário precisa enviar `/start` ao bot, ou o bot precisa estar no grupo, antes do primeiro envio.
 
-**5. O logo aparece quebrado no e-mail.**
-Mantenha apenas **uma** imagem começando com `logo.` na pasta mapeada. Sem nenhuma, o logotipo padrão do projeto é usado.
+**5. O link de "esqueci minha senha" não chega.**
+Configure o SMTP em **Sistema** (e use **Enviar teste**) ou cadastre um remetente SMTP na conta do usuário. Sem nenhum dos dois, o envio falha e o erro aparece nos logs do contêiner.
 
 **6. DNSSEC aparece como "não assinado", mas o domínio é assinado.**
 A verificação consulta o registro `DS` em resolvers públicos (1.1.1.1, 8.8.8.8, 9.9.9.9). Se o servidor bloquear DNS externo, o resultado pode sair incorreto.

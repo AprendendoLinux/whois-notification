@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Remetentes{% endblock %}
+{% block crumb %}// CANAIS DE ENVIO{% endblock %}
+{% block heading %}Remetentes{% endblock %}
+
+{% macro smtp_fields(s=none) %}
+<div class="row">
+  <div class="field"><label>Nome (identificação)</label><input type="text" name="name" value="{{ s.name if s else '' }}" placeholder="Servidor principal" required></div>
+  <div class="field"><label>Servidor SMTP</label><input type="text" name="server" value="{{ s.server if s else '' }}" placeholder="smtp.exemplo.com.br" required></div>
+</div>
+<div class="row">
+  <div class="field"><label>Porta</label><input type="number" name="port" min="1" max="65535" value="{{ s.port if s else 587 }}" required></div>
+  <div class="field"><label>Segurança</label>
+    <select name="security">
+      {% for v, l in [("starttls","STARTTLS (587)"),("ssl","SSL/TLS (465)"),("none","Sem criptografia (25)")] %}
+      <option value="{{ v }}" {{ "selected" if s and s.security == v }}>{{ l }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<div class="row">
+  <div class="field"><label>Usuário</label><input type="text" name="username" value="{{ s.username if s else '' }}" autocomplete="off"></div>
+  <div class="field"><label>Senha</label><input type="password" name="password" autocomplete="new-password" placeholder="{{ '•••••••• (deixe em branco para manter)' if s and s.password_enc else '' }}">
+    {% if s and s.password_enc %}<label class="check" style="font-size:12px;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" name="clear_password"> apagar senha salva</label>{% endif %}
+  </div>
+</div>
+<div class="row">
+  <div class="field"><label>Remetente (e-mail)</label><input type="email" name="from_email" value="{{ s.from_email if s else '' }}" placeholder="alertas@exemplo.com.br" required></div>
+  <div class="field"><label>Remetente (nome)</label><input type="text" name="from_name" value="{{ s.from_name if s else 'Whois Notification' }}"></div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<section class="grid grid-2">
+  <div class="stack">
+    <div class="panel corners">
+      <div class="panel-head"><h2>Remetentes SMTP</h2><span class="hint">{{ smtp|length }} cadastrado(s)</span></div>
+      {% for s in smtp %}
+      <div style="border-top:1px solid var(--line);padding:12px 0">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+          <div><b>{{ s.name }}</b> {% if s.is_default %}<span class="badge ok">padrão</span>{% endif %}<br>
+            <span class="mono muted">{{ s.from_email }} · {{ s.server }}:{{ s.port }}</span></div>
+          <div class="actions">
+            {% if not s.is_default %}<form method="post" action="/senders/smtp/{{ s.id }}/default"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn sm" type="submit">Tornar padrão</button></form>{% endif %}
+            <form method="post" action="/senders/smtp/{{ s.id }}/test"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn sm" type="submit" title="Envia um teste para {{ user.email }}">{{ icon("send") }} Testar</button></form>
+            <form method="post" action="/senders/smtp/{{ s.id }}/delete" onsubmit="return confirm('Remover este remetente?')"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn danger sm" type="submit">{{ icon("trash") }}</button></form>
+          </div>
+        </div>
+        <details class="edit"><summary>Editar</summary>
+          <form class="form" method="post" action="/senders/smtp/{{ s.id }}"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+            {{ smtp_fields(s) }}
+            <div class="actions"><button class="btn primary sm" type="submit">Salvar alterações</button></div>
+          </form>
+        </details>
+      </div>
+      {% else %}<p class="muted">Nenhum remetente SMTP. Cadastre um para enviar alertas por e-mail.</p>{% endfor %}
+    </div>
+    <form class="panel form" method="post" action="/senders/smtp">
+      <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+      <div class="panel-head" style="margin:0"><h2>Novo remetente SMTP</h2></div>
+      {{ smtp_fields() }}
+      <div class="actions"><button class="btn primary" type="submit">{{ icon("plus") }} Adicionar</button></div>
+    </form>
+  </div>
+
+  <div class="stack">
+    <div class="panel corners">
+      <div class="panel-head"><h2>Bots do Telegram</h2><span class="hint">{{ bots|length }} cadastrado(s)</span></div>
+      {% for b in bots %}
+      <div style="border-top:1px solid var(--line);padding:12px 0">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+          <div><b>{{ b.name }}</b> {% if b.is_default %}<span class="badge ok">padrão</span>{% endif %}<br><span class="mono muted">token salvo (criptografado)</span></div>
+          <div class="actions">
+            {% if not b.is_default %}<form method="post" action="/senders/telegram/{{ b.id }}/default"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn sm" type="submit">Tornar padrão</button></form>{% endif %}
+            <form method="post" action="/senders/telegram/{{ b.id }}/delete" onsubmit="return confirm('Remover este bot?')"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn danger sm" type="submit">{{ icon("trash") }}</button></form>
+          </div>
+        </div>
+        <details class="edit"><summary>Editar / testar</summary>
+          <form class="form" method="post" action="/senders/telegram/{{ b.id }}"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+            <div class="row">
+              <div class="field"><label>Nome</label><input type="text" name="name" value="{{ b.name }}" required></div>
+              <div class="field"><label>Novo token</label><input type="password" name="token" autocomplete="new-password" placeholder="deixe em branco para manter"></div>
+            </div>
+            <div class="actions"><button class="btn primary sm" type="submit">Salvar</button></div>
+          </form>
+          <form class="row" method="post" action="/senders/telegram/{{ b.id }}/test" style="align-items:end;margin-top:10px"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+            <div class="field"><label>Chat ID para teste</label><input class="mono" type="text" name="chat_id" placeholder="-10022222222" required></div>
+            <div class="field"><button class="btn sm" type="submit">{{ icon("send") }} Enviar teste</button></div>
+          </form>
+        </details>
+      </div>
+      {% else %}<p class="muted">Nenhum bot cadastrado.</p>{% endfor %}
+    </div>
+    <form class="panel form" method="post" action="/senders/telegram">
+      <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+      <div class="panel-head" style="margin:0"><h2>Novo bot do Telegram</h2></div>
+      <div class="row">
+        <div class="field"><label>Nome</label><input type="text" name="name" placeholder="Bot de alertas" required></div>
+        <div class="field"><label>Token do bot</label><input type="password" name="token" autocomplete="new-password" placeholder="123456789:ABCDEF…" required></div>
+      </div>
+      <p class="muted" style="margin:0;font-size:12px">Crie o bot com o @BotFather. Cada destinatário precisa enviar <code>/start</code> ao bot (ou adicioná-lo ao grupo) antes de receber mensagens. Os destinatários (Chat IDs e e-mails) ficam em <a href="/contacts">Contatos</a>.</p>
+      <div class="actions"><button class="btn primary" type="submit">{{ icon("plus") }} Adicionar</button></div>
+    </form>
+  </div>
+</section>
+{% endblock %}

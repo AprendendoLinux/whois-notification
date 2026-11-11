@@ -1,38 +1,73 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 40px 20px;">
-  <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-    <tr>
-      <td align="center" style="background-color: {{ t.bg }}; padding: 30px 20px;">
-        {% if has_logo %}<img src="cid:logo" alt="Logo" style="max-height: 80px; margin-bottom: 15px; display: block; border-radius: 4px;">{% endif %}
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px;">{{ a.header }}</h1>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 40px 30px;">
-        <p style="font-size: 18px; color: #333333; margin-top: 0;">Olá,</p>
-        <p style="font-size: 16px; color: #555555; line-height: 1.5;">{{ intro_html|safe }}</p>
-        <div style="background-color: {{ t.box_bg }}; border-left: 5px solid {{ t.box_border }}; padding: 15px 20px; margin: 25px 0; border-radius: 0 4px 4px 0;">
-          <h2 style="margin: 0 0 5px 0; color: {{ t.title }}; font-size: 28px;">{{ a.box_title }}</h2>
-          <span style="color: #555555; font-size: 14px;">{{ a.box_sub }}</span>
-        </div>
-        <table border="0" cellpadding="12" cellspacing="0" width="100%" style="background-color: #f9f9f9; border: 1px solid #eeeeee; border-radius: 6px;">
-          {% for label, value in a.rows %}
-          <tr>
-            <td width="40%" style="color: #666666; font-weight: bold;{% if not loop.last %} border-bottom: 1px solid #eeeeee;{% endif %}">{{ label }}:</td>
-            <td width="60%" style="color: #333333;{% if not loop.last %} border-bottom: 1px solid #eeeeee;{% endif %}">{{ value }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% if a.footer %}<p style="font-size: 14px; color: #555555; line-height: 1.5; margin-top: 25px;">{{ a.footer }}</p>{% endif %}
-      </td>
-    </tr>
-    <tr>
-      <td align="center" style="background-color: #f8f9fa; padding: 20px; border-top: 1px solid #eeeeee;">
-        <p style="margin: 0; font-size: 12px; color: #aaaaaa;">Mensagem automática gerada pelo sistema <strong>Whois Notification</strong>.</p>
-      </td>
-    </tr>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+</head>
+<body bgcolor="#04060c" style="margin:0;padding:0;background-color:#04060c;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#d8e6ff;">
+<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#04060c" style="background-color:#04060c;background-image:linear-gradient(160deg,#04060c 0%,#0a1020 55%,#120a26 100%);">
+<tr><td align="center" style="padding:36px 14px;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;">
+    <tr><td height="3" style="height:3px;line-height:3px;font-size:0;background-color:{{ t.accent }};background-image:linear-gradient(90deg,{{ t.accent }},{{ t.accent2 }});border-radius:3px 3px 0 0;">&nbsp;</td></tr>
+    <tr><td bgcolor="#0b1222" style="background-color:#0b1222;border-left:1px solid #17304a;border-right:1px solid #17304a;border-bottom:1px solid #17304a;border-radius:0 0 14px 14px;">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+        <tr><td align="center" style="padding:34px 24px 10px 24px;">
+          {% if has_logo %}<img src="cid:logo" width="72" height="72" alt="Whois Notification" style="display:block;margin:0 auto 14px auto;border:0;">{% endif %}
+          <div style="font-family:'Orbitron','Segoe UI',Arial,sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;color:#00e5ff;text-transform:uppercase;">Whois Notification</div>
+          <div style="font-family:Consolas,'Courier New',monospace;font-size:10px;letter-spacing:3px;color:#4f5f80;margin-top:4px;">// DOMAIN CONTROL</div>
+        </td></tr>
+        <tr><td align="center" style="padding:14px 24px 6px 24px;">
+          <h1 style="margin:0;font-size:22px;line-height:1.25;color:{{ t.accent }};text-transform:uppercase;letter-spacing:2px;font-weight:700;">{{ a.header }}</h1>
+        </td></tr>
+        <tr><td style="padding:22px 34px 8px 34px;">
+          <p style="margin:0 0 12px 0;font-size:16px;color:#d8e6ff;">Olá,</p>
+          <p style="margin:0;font-size:15px;line-height:1.6;color:#a9bad8;">{{ intro_html|safe }}</p>
+        </td></tr>
+        {% if a.box_title %}
+        <tr><td style="padding:18px 34px 6px 34px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="{{ t.box_bg }}" style="background-color:{{ t.box_bg }};border:1px solid #17304a;border-left:4px solid {{ t.accent }};border-radius:10px;">
+            <tr><td style="padding:16px 20px;">
+              <div style="font-size:26px;font-weight:700;color:{{ t.accent }};line-height:1.2;">{{ a.box_title }}</div>
+              <div style="font-size:13px;color:#8193b5;margin-top:6px;">{{ a.box_sub }}</div>
+            </td></tr>
+          </table>
+        </td></tr>
+        {% endif %}
+        {% if a.rows %}
+        <tr><td style="padding:14px 34px 6px 34px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#0d1730" style="background-color:#0d1730;border:1px solid #17304a;border-radius:10px;">
+            {% for label, value in a.rows %}
+            <tr>
+              <td width="38%" valign="top" style="padding:11px 14px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#6f82a8;{% if not loop.last %}border-bottom:1px solid #14243c;{% endif %}">{{ label }}</td>
+              <td width="62%" valign="top" style="padding:11px 14px;font-family:Consolas,'Courier New',monospace;font-size:13px;color:#d8e6ff;word-break:break-word;{% if not loop.last %}border-bottom:1px solid #14243c;{% endif %}">{{ value }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+        </td></tr>
+        {% endif %}
+        {% if a.action %}
+        <tr><td align="center" style="padding:24px 34px 6px 34px;">
+          <a href="{{ a.action[1] }}" style="display:inline-block;padding:13px 30px;background-color:#00e5ff;background-image:linear-gradient(90deg,#00e5ff,#8b5cff);color:#04060c;font-weight:700;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;text-decoration:none;border-radius:8px;">{{ a.action[0] }}</a>
+          <p style="margin:14px 0 0 0;font-size:11px;color:#4f5f80;word-break:break-all;">{{ a.action[1] }}</p>
+        </td></tr>
+        {% endif %}
+        {% if a.footer %}
+        <tr><td style="padding:18px 34px 6px 34px;">
+          <p style="margin:0;font-size:14px;line-height:1.6;color:#8193b5;">{{ a.footer }}</p>
+        </td></tr>
+        {% endif %}
+        <tr><td align="center" style="padding:30px 24px 26px 24px;">
+          <div style="border-top:1px solid #14243c;padding-top:18px;font-size:12px;color:#4f5f80;line-height:1.6;">
+            Mensagem automática do sistema <strong style="color:#00e5ff;">Whois Notification</strong><br>
+            <span style="font-family:Consolas,'Courier New',monospace;">v{{ version }}</span>
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
   </table>
+</td></tr>
+</table>
 </body>
 </html>

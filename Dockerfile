@@ -6,7 +6,6 @@ LABEL org.opencontainers.image.source="https://github.com/AprendendoLinux/whois-
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DATA_DIR=/app/data \
     PORT=8000
 
 # Cliente whois do sistema (fallback do python-whois para alguns TLDs)

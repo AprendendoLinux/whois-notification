@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Usuários{% endblock %}
+{% block crumb %}// ADMINISTRAÇÃO{% endblock %}
+{% block heading %}Usuários{% endblock %}
+
+{% block content %}
+<section class="panel corners">
+  <div class="panel-head"><h2>Novo usuário</h2><span class="hint">a senha temporária deve ser trocada no primeiro login</span></div>
+  <form class="row" method="post" action="/admin/users" style="align-items:end">
+    <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+    <div class="field"><label for="nu">Usuário</label><input id="nu" type="text" name="username" required autocomplete="off"></div>
+    <div class="field"><label for="ne">E-mail (obrigatório)</label><input id="ne" type="email" name="email" required autocomplete="off"></div>
+    <div class="field"><label for="np">Senha temporária</label><input id="np" type="text" name="password" minlength="8" placeholder="em branco = gerar automática" autocomplete="off"></div>
+    <label class="check"><input type="checkbox" name="is_admin"> Administrador</label>
+    <div class="field"><button class="btn primary" type="submit">{{ icon("plus") }} Criar</button></div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ users|length }} usuário(s)</h2></div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Domínios</th><th>Último acesso</th><th style="text-align:right">Ações</th></tr></thead>
+      <tbody>
+      {% for u in users %}
+      <tr>
+        <td><b>{{ u.username }}</b>{% if u.id == user.id %} <span class="muted">(você)</span>{% endif %}{% if u.must_change_password %}<br><span class="badge warn">senha temporária</span>{% endif %}</td>
+        <td class="mono" style="white-space:nowrap">{{ u.email }}</td>
+        <td>{% if u.is_admin %}<span class="badge magenta">Administrador</span>{% else %}<span class="badge">Usuário</span>{% endif %}</td>
+        <td>{% if u.is_active %}<span class="badge ok">Ativo</span>{% else %}<span class="badge off">Desativado</span>{% endif %}</td>
+        <td class="mono">{{ counts.get(u.id, 0) }}</td>
+        <td class="mono" style="white-space:nowrap">{{ u.last_login_at|datetime if u.last_login_at else "nunca" }}</td>
+        <td>
+          {% if u.id != user.id %}
+          <div class="actions" style="justify-content:flex-end">
+            <form method="post" action="/admin/users/{{ u.id }}/admin"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn sm" type="submit">{{ "Revogar admin" if u.is_admin else "Tornar admin" }}</button></form>
+            <form method="post" action="/admin/users/{{ u.id }}/active"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn sm" type="submit">{{ "Desativar" if u.is_active else "Reativar" }}</button></form>
+            <form method="post" action="/admin/users/{{ u.id }}/reset" onsubmit="return confirm('Gerar nova senha temporária para {{ u.username }}?')"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn sm" type="submit" title="Gerar senha temporária">{{ icon("key") }}</button></form>
+            <form method="post" action="/admin/users/{{ u.id }}/delete" onsubmit="return confirm('Excluir {{ u.username }} e TODOS os seus dados (domínios, contatos, remetentes)? Esta ação não pode ser desfeita.')"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn danger sm" type="submit" title="Excluir">{{ icon("trash") }}</button></form>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Sistema{% endblock %}
+{% block crumb %}// ADMINISTRAÇÃO{% endblock %}
+{% block heading %}Configurações do sistema{% endblock %}
+
+{% block content %}
+<form class="form" method="post" action="/admin/system">
+  <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+  <section class="grid grid-2">
+    <div class="panel corners form">
+      <div class="panel-head" style="margin:0"><h2>Geral</h2></div>
+      <div class="field"><label for="tz">Fuso horário</label><select id="tz" name="timezone" required>{% for z in timezones %}<option value="{{ z }}" {{ "selected" if z == s.timezone }}>{{ z }}</option>{% endfor %}</select><span class="help">Nome IANA. Define os horários exibidos e o das varreduras diárias.</span></div>
+      <div class="field"><label for="pu">URL pública do sistema</label><input id="pu" type="text" name="public_url" value="{{ s.public_url }}" placeholder="{{ request_base }}"><span class="help">Usada nos links dos e-mails de recuperação de senha. Em branco, usa o endereço da requisição.</span></div>
+    </div>
+    <div class="panel corners form">
+      <div class="panel-head" style="margin:0"><h2>SMTP do sistema</h2><span class="hint">recuperação de senha</span></div>
+      <p class="muted" style="margin:0;font-size:12px">Envia os e-mails de "esqueci minha senha". Se não for configurado, o sistema tenta usar o remetente SMTP do próprio usuário.</p>
+      <div class="row">
+        <div class="field"><label>Servidor</label><input type="text" name="sys_smtp_server" value="{{ s.sys_smtp_server }}" placeholder="smtp.exemplo.com.br"></div>
+        <div class="field"><label>Porta</label><input type="number" name="sys_smtp_port" value="{{ s.sys_smtp_port }}"></div>
+      </div>
+      <div class="field"><label>Segurança</label>
+        <select name="sys_smtp_security">
+          {% for v, l in [("starttls","STARTTLS (587)"),("ssl","SSL/TLS (465)"),("none","Sem criptografia (25)")] %}<option value="{{ v }}" {{ "selected" if s.sys_smtp_security == v }}>{{ l }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <div class="field"><label>Usuário</label><input type="text" name="sys_smtp_user" value="{{ s.sys_smtp_user }}" autocomplete="off"></div>
+        <div class="field"><label>Senha</label><input type="password" name="sys_smtp_password" autocomplete="new-password" placeholder="{{ '•••••••• (deixe em branco para manter)' if has_password }}">
+          {% if has_password %}<label class="check" style="font-size:12px;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" name="sys_smtp_password_clear"> apagar senha salva</label>{% endif %}</div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Remetente (e-mail)</label><input type="email" name="sys_smtp_from" value="{{ s.sys_smtp_from }}" placeholder="noreply@exemplo.com.br"></div>
+        <div class="field"><label>Remetente (nome)</label><input type="text" name="sys_smtp_from_name" value="{{ s.sys_smtp_from_name }}"></div>
+      </div>
+    </div>
+  </section>
+  <div class="actions"><button class="btn primary" type="submit">Salvar configurações</button></div>
+</form>
+<form method="post" action="/admin/system/test"><input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><button class="btn" type="submit">{{ icon("send") }} Enviar teste para {{ user.email }}</button></form>
+{% endblock %}
