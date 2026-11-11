@@ -1,0 +1,12 @@
+{% extends "auth_base.html" %}
+{% block title %}Nova senha{% endblock %}
+{% block content %}
+<form class="form" method="post" action="/reset/{{ token }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+  <div><h2>Criar nova senha</h2><p class="muted" style="margin:6px 0 0">Escolha uma senha com pelo menos 8 caracteres.</p></div>
+  {% if error %}<div class="flash"><div class="err" role="alert">{{ error }}</div></div>{% endif %}
+  <div class="field"><label for="p">Nova senha</label><input id="p" type="password" name="password" minlength="8" autocomplete="new-password" required autofocus></div>
+  <div class="field"><label for="p2">Confirme a senha</label><input id="p2" type="password" name="password2" minlength="8" autocomplete="new-password" required></div>
+  <button class="btn primary" type="submit">Salvar nova senha</button>
+</form>
+{% endblock %}

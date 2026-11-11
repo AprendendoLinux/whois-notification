@@ -25,16 +25,22 @@ def _summary(d: Domain) -> dict:
     }
 
 
+def _own(db: Session, domain_id: int, user: User) -> Domain:
+    d = db.get(Domain, domain_id)
+    if not d or d.user_id != user.id:
+        raise HTTPException(404, "Domínio não encontrado")
+    return d
+
+
 @router.get("/domains")
-def list_domains(_u: User = Depends(require_user), db: Session = Depends(get_db)):
-    return [_summary(d) for d in db.scalars(select(Domain).order_by(Domain.name))]
+def list_domains(user: User = Depends(require_user), db: Session = Depends(get_db)):
+    return [_summary(d) for d in db.scalars(
+        select(Domain).where(Domain.user_id == user.id).order_by(Domain.name))]
 
 
 @router.get("/domains/{domain_id}")
-def get_domain(domain_id: int, _u: User = Depends(require_user), db: Session = Depends(get_db)):
-    d = db.get(Domain, domain_id)
-    if not d:
-        raise HTTPException(404, "Domínio não encontrado")
+def get_domain(domain_id: int, user: User = Depends(require_user), db: Session = Depends(get_db)):
+    d = _own(db, domain_id, user)
     latest = db.scalars(select(Check).where(Check.domain_id == d.id)
                         .order_by(Check.created_at.desc()).limit(1)).first()
     out = _summary(d)
@@ -48,8 +54,9 @@ def get_domain(domain_id: int, _u: User = Depends(require_user), db: Session = D
 
 
 @router.get("/domains/{domain_id}/history")
-def domain_history(domain_id: int, limit: int = 90, _u: User = Depends(require_user),
+def domain_history(domain_id: int, limit: int = 90, user: User = Depends(require_user),
                    db: Session = Depends(get_db)):
+    _own(db, domain_id, user)
     rows = db.scalars(
         select(Check).where(Check.domain_id == domain_id)
         .order_by(Check.created_at.desc()).limit(min(max(limit, 1), 1000))

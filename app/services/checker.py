@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ..config import LOCAL_TZ
+from ..config import local_tz
 from ..db import SessionLocal
-from ..models import Change, Check, Domain, Notification, utcnow
+from ..models import Change, Check, Domain, Notification, User, utcnow
 from . import dns_service, http_service, ssl_service, whois_service
 from . import settings as cfg
 from .notifier import Alert, dispatch, email_ready, telegram_ready
@@ -128,15 +128,15 @@ def _should_notify(db: Session, domain: Domain, kind: str, days_left: int | None
     if not prior:
         return True  # primeira vez dentro da janela neste ciclo
 
-    today = datetime.now(LOCAL_TZ).date()
-    if any(n.created_at.astimezone(LOCAL_TZ).date() == today for n in prior):
+    today = datetime.now(local_tz()).date()
+    if any(n.created_at.astimezone(local_tz()).date() == today for n in prior):
         return False  # no máximo um aviso por dia
 
-    if days_left < 0 or days_left <= cfg.get_int(db, "daily_below"):
+    if days_left < 0 or days_left <= cfg.get_int(db, domain.user_id, "daily_below"):
         return True
 
     # Marcos: avisa ao cruzar cada marco, mesmo se a verificação do dia exato falhou
-    reached = [m for m in cfg.get_int_list(db, "milestones") if m >= days_left]
+    reached = [m for m in cfg.get_int_list(db, domain.user_id, "milestones") if m >= days_left]
     if not reached:
         return False
     milestone = min(reached)
@@ -145,8 +145,9 @@ def _should_notify(db: Session, domain: Domain, kind: str, days_left: int | None
 
 def _recipients(db: Session, domain: Domain) -> tuple[list[str], list[str]]:
     """Destinatários por canal, ignorando canais sem configuração (evita falhas repetidas)."""
-    emails = [c.value for c in domain.contacts if c.kind == "email"] if email_ready(db) else []
-    chats = [c.value for c in domain.contacts if c.kind == "telegram"] if telegram_ready(db) else []
+    uid = domain.user_id
+    emails = [c.value for c in domain.contacts if c.kind == "email"] if email_ready(db, uid, domain) else []
+    chats = [c.value for c in domain.contacts if c.kind == "telegram"] if telegram_ready(db, uid, domain) else []
     return emails, chats
 
 
@@ -317,47 +318,56 @@ def _notify(db: Session, domain: Domain, changes: list[Change]) -> None:
     if domain.expiration_date and _should_notify(
         db, domain, "domain_expiry", d, domain.days_threshold, domain.expiration_date.date().isoformat()
     ):
-        dispatch(db, domain, expiry_alert(domain, d), "domain_expiry", emails=emails, chats=chats,
+        dispatch(db, domain.user_id, domain, expiry_alert(domain, d), "domain_expiry", emails=emails, chats=chats,
                  days_left=d, ref_date=domain.expiration_date.date().isoformat())
 
     s = domain.ssl_days_left
     if domain.monitor_ssl and domain.ssl_expires_at and _should_notify(
         db, domain, "ssl_expiry", s, domain.ssl_threshold, domain.ssl_expires_at.date().isoformat()
     ):
-        dispatch(db, domain, ssl_alert(domain, s), "ssl_expiry", emails=emails, chats=chats,
+        dispatch(db, domain.user_id, domain, ssl_alert(domain, s), "ssl_expiry", emails=emails, chats=chats,
                  days_left=s, ref_date=domain.ssl_expires_at.date().isoformat())
 
     important = [c for c in changes if c.severity in ("critical", "warning")]
-    if important and cfg.get(db, "alert_on_changes") == "1":
-        dispatch(db, domain, changes_alert(domain, important), "change", emails=emails, chats=chats)
+    if important and cfg.get(db, domain.user_id, "alert_on_changes") == "1":
+        dispatch(db, domain.user_id, domain, changes_alert(domain, important), "change", emails=emails, chats=chats)
 
 
-def run_all(notify: bool = True, max_workers: int = 4) -> None:
+def run_all(user_id: int | None = None, notify: bool = True, max_workers: int = 4) -> None:
+    """Verifica os domínios ativos de um usuário (ou de todos, quando user_id é None)."""
     with SessionLocal() as db:
-        ids = list(db.scalars(select(Domain.id).where(Domain.enabled.is_(True))))
-    stamp = datetime.now(LOCAL_TZ).strftime("%d/%m/%Y %H:%M:%S")
+        q = select(Domain.id).where(Domain.enabled.is_(True))
+        if user_id is not None:
+            q = q.where(Domain.user_id == user_id)
+        ids = list(db.scalars(q))
+    stamp = datetime.now(local_tz()).strftime("%d/%m/%Y %H:%M:%S")
     print(f"[{stamp}] Verificando {len(ids)} domínio(s)...")
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         list(pool.map(lambda i: run_check(i, notify), ids))
-    prune_history()
-    print(f"[{datetime.now(LOCAL_TZ).strftime('%d/%m/%Y %H:%M:%S')}] Verificação concluída.")
+    prune_history(user_id)
+    print(f"[{datetime.now(local_tz()).strftime('%d/%m/%Y %H:%M:%S')}] Verificação concluída.")
 
 
-def prune_history() -> None:
+def prune_history(user_id: int | None = None) -> None:
     with SessionLocal() as db:
-        days = cfg.get_int(db, "history_days")
-        if days <= 0:
-            return
-        cutoff = utcnow() - timedelta(days=days)
-        # Mantém sempre a verificação mais recente de cada domínio
-        for (domain_id,) in db.execute(select(Domain.id)):
-            latest = db.scalar(
-                select(Check.id).where(Check.domain_id == domain_id)
-                .order_by(Check.created_at.desc()).limit(1)
-            )
-            db.execute(
-                delete(Check).where(Check.domain_id == domain_id, Check.created_at < cutoff,
-                                    Check.id != (latest or 0))
-            )
-        db.execute(delete(Notification).where(Notification.created_at < cutoff))
+        q = select(User.id)
+        if user_id is not None:
+            q = q.where(User.id == user_id)
+        for uid in list(db.scalars(q)):
+            days = cfg.get_int(db, uid, "history_days")
+            if days <= 0:
+                continue
+            cutoff = utcnow() - timedelta(days=days)
+            # Mantém sempre a verificação mais recente de cada domínio
+            for (domain_id,) in db.execute(select(Domain.id).where(Domain.user_id == uid)):
+                latest = db.scalar(
+                    select(Check.id).where(Check.domain_id == domain_id)
+                    .order_by(Check.created_at.desc()).limit(1)
+                )
+                db.execute(
+                    delete(Check).where(Check.domain_id == domain_id, Check.created_at < cutoff,
+                                        Check.id != (latest or 0))
+                )
+            db.execute(delete(Notification).where(Notification.user_id == uid,
+                                                  Notification.created_at < cutoff))
         db.commit()

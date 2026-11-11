@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from . import auth
-from .config import APP_NAME, APP_VERSION, BASE_DIR, LOCAL_TZ
+from .config import APP_NAME, APP_VERSION, BASE_DIR, local_tz
 from .db import get_db
 from .models import User, utcnow
 
@@ -15,7 +15,7 @@ class LoginRequired(Exception):
     pass
 
 
-class SetupRequired(Exception):
+class PasswordChangeRequired(Exception):
     pass
 
 
@@ -32,7 +32,7 @@ HEALTH = {
 
 
 def _local(dt: datetime | None) -> datetime | None:
-    return dt.astimezone(LOCAL_TZ) if dt else None
+    return dt.astimezone(local_tz()) if dt else None
 
 
 def _parse(dt):
@@ -119,12 +119,23 @@ def pop_flash(request: Request) -> list[dict]:
 templates.env.globals["pop_flash"] = pop_flash
 
 
-def require_user(request: Request, db: Session = Depends(get_db)) -> User:
+def require_user_any(request: Request, db: Session = Depends(get_db)) -> User:
+    """Usuário autenticado, mesmo que ainda precise trocar a senha."""
     user = auth.current_user(request, db)
     if user is None:
-        if auth.user_count(db) == 0:
-            raise SetupRequired()
         raise LoginRequired()
+    return user
+
+
+def require_user(user: User = Depends(require_user_any)) -> User:
+    if user.must_change_password or user.needs_email:
+        raise PasswordChangeRequired()
+    return user
+
+
+def require_admin(user: User = Depends(require_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
     return user
 
 
