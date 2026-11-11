@@ -82,7 +82,7 @@
       <dt>Próxima varredura</dt><dd>{{ next_run|datetime if next_run else "—" }}</dd>
       <dt>Varredura em curso</dt><dd>{% if running_all or running %}<span class="badge"><span class="dot pulse"></span>Sim</span>{% else %}Não{% endif %}</dd>
       <dt>Alertas enviados</dt><dd><span class="ok-t">{{ sent_ok }}</span> com sucesso · <span class="{{ 'crit-t' if sent_fail else 'muted' }}">{{ sent_fail }}</span> com falha</dd>
-      <dt>Banco de dados</dt><dd>SQLite · whois.db</dd>
+      <dt>Banco de dados</dt><dd>MySQL · {{ db_name }}</dd>
     </dl>
   </div>
 </section>

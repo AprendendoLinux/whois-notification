@@ -8,6 +8,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import auth, scheduler
+from ..config import DB_NAME
 from ..db import get_db
 from ..models import (
     Change, Check, Contact, Domain, Notification, PasswordReset, SmtpSender, TelegramBot, User, utcnow,
@@ -205,6 +206,7 @@ def _dashboard_ctx(db: Session, user: User) -> dict:
     mine = {d.id for d in domains}
     return {
         "domains_json": json.dumps(chart).replace("</", "<\\/"),
+        "db_name": DB_NAME,
         "domains": domains, "stats": stats, "total": len(domains),
         "channel_warnings": channel_warnings,
         "recent_changes": recent_changes, "sent_ok": sent.get(True, 0), "sent_fail": sent.get(False, 0),
